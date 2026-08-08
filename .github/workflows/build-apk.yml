@@ -1,4 +1,4 @@
-name: Build OMEX AI Gallery APK
+name: Build OMEX AI Gallery1 APK
 
 on:
   workflow_dispatch:
@@ -11,11 +11,11 @@ permissions:
 
 jobs:
   build:
-    name: Build Android APK
+    name: Build OMEX AI Gallery1
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
+      - name: Checkout OMEX AI Gallery1
         uses: actions/checkout@v4
 
       - name: Setup JDK 17
@@ -29,11 +29,13 @@ jobs:
         with:
           gradle-version: '8.7'
 
-      - name: Build APK
+      - name: Build OMEX AI Gallery1 APK
         run: gradle assembleDebug
 
-      - name: Upload APK
+      - name: Upload OMEX AI Gallery1 APK
         uses: actions/upload-artifact@v4
         with:
-          name: OMEX-AI-Gallery-APK
+          name: OMEX-AI-Gallery1-APK
           path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 7
