@@ -33,7 +33,8 @@ data class MediaItem(
     val focalLength: String? = null,
     val latitude: Double? = null,
     val longitude: Double? = null,
-    val isIndexed: Boolean = false
+    val isIndexed: Boolean = false,
+    val isAiProcessed: Boolean = false
 )
 
 fun MediaItemEntity.toDomain(): MediaItem = MediaItem(
@@ -62,7 +63,8 @@ fun MediaItemEntity.toDomain(): MediaItem = MediaItem(
     focalLength = focalLength,
     latitude = latitude,
     longitude = longitude,
-    isIndexed = isIndexed
+    isIndexed = isIndexed,
+    isAiProcessed = isAiProcessed
 )
 
 fun MediaItem.toEntity(): MediaItemEntity = MediaItemEntity(
@@ -91,5 +93,6 @@ fun MediaItem.toEntity(): MediaItemEntity = MediaItemEntity(
     focalLength = focalLength,
     latitude = latitude,
     longitude = longitude,
-    isIndexed = isIndexed
+    isIndexed = isIndexed,
+    isAiProcessed = isAiProcessed
 )

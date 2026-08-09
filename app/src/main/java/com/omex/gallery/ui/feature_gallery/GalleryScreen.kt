@@ -41,6 +41,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Category
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.CheckCircleOutline
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CopyAll
@@ -161,6 +164,7 @@ fun GalleryScreen(
     val indexingProgress by viewModel.indexingProgress.collectAsStateWithLifecycle()
     val personGroups by viewModel.personGroups.collectAsStateWithLifecycle()
     val duplicateGroups by viewModel.duplicateGroups.collectAsStateWithLifecycle()
+    val selectedItemIds by viewModel.selectedItemIds.collectAsStateWithLifecycle()
 
     var isSearchActive by remember { mutableStateOf(true) }
     var isFilterPanelExpanded by remember { mutableStateOf(false) }
@@ -866,33 +870,75 @@ fun GalleryScreen(
                 else -> {
                     val isGridEmpty = if (searchFilterState.hasActiveFilters) mediaItems.isEmpty() else pagedItems.itemCount == 0
                     if (isGridEmpty) {
-                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Icon(imageVector = Icons.Default.Image, contentDescription = null, tint = TextMutedDark, modifier = Modifier.size(64.dp))
-                                Spacer(modifier = Modifier.height(12.dp))
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(32.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Center
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(72.dp)
+                                        .clip(CircleShape)
+                                        .background(SurfaceCard),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Image,
+                                        contentDescription = null,
+                                        tint = CyanAccent,
+                                        modifier = Modifier.size(36.dp)
+                                    )
+                                }
+                                Spacer(modifier = Modifier.height(16.dp))
                                 Text(
-                                    text = if (searchFilterState.hasActiveFilters) stringResource(R.string.no_matches_filters) else stringResource(R.string.no_media_found),
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    color = TextMutedDark
+                                    text = if (searchFilterState.hasActiveFilters) stringResource(R.string.no_matches_filters) else "أصبحت مكتبتك فارغة",
+                                    style = MaterialTheme.typography.titleMedium.copy(
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 16.sp
+                                    ),
+                                    color = TextPrimaryDark,
+                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
                                 )
                                 Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    text = if (searchFilterState.hasActiveFilters) "جرب تغيير كلمات البحث أو مسح الفلاتر" else "لم نجد أي صور أو فيديوهات في التخزين. اضغط للبحث عن وسائط جديدة.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = TextMutedDark,
+                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                )
+                                Spacer(modifier = Modifier.height(20.dp))
                                 if (searchFilterState.hasActiveFilters) {
-                                    Button(onClick = { viewModel.clearAllFilters() }, colors = ButtonDefaults.buttonColors(containerColor = SurfaceCard)) {
-                                        Text(stringResource(R.string.clear_filters), color = CyanAccent)
+                                    Button(
+                                        onClick = { viewModel.clearAllFilters() },
+                                        colors = ButtonDefaults.buttonColors(containerColor = CyanAccent),
+                                        shape = RoundedCornerShape(12.dp)
+                                    ) {
+                                        Text(stringResource(R.string.clear_filters), color = ObsidianBg, fontWeight = FontWeight.Bold)
                                     }
                                 } else {
-                                    Button(onClick = { viewModel.triggerGalleryScan(context) }, colors = ButtonDefaults.buttonColors(containerColor = SurfaceCard)) {
-                                        Text(stringResource(R.string.scan_mediastore), color = CyanAccent)
+                                    Button(
+                                        onClick = { viewModel.triggerGalleryScan(context) },
+                                        colors = ButtonDefaults.buttonColors(containerColor = CyanAccent),
+                                        shape = RoundedCornerShape(12.dp)
+                                    ) {
+                                        Icon(imageVector = Icons.Default.Refresh, contentDescription = null, tint = ObsidianBg, modifier = Modifier.size(18.dp))
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text("إعادة فحص الوسائط", color = ObsidianBg, fontWeight = FontWeight.Bold)
                                     }
                                 }
                             }
                         }
                     } else {
                         LazyVerticalGrid(
-                            columns = GridCells.Adaptive(minSize = 110.dp),
-                            contentPadding = PaddingValues(4.dp),
-                            horizontalArrangement = Arrangement.spacedBy(4.dp),
-                            verticalArrangement = Arrangement.spacedBy(4.dp),
+                            columns = GridCells.Fixed(3),
+                            contentPadding = PaddingValues(1.dp),
+                            horizontalArrangement = Arrangement.spacedBy(3.dp),
+                            verticalArrangement = Arrangement.spacedBy(3.dp),
                             modifier = Modifier.fillMaxSize().testTag("gallery_media_grid")
                         ) {
                             if (searchFilterState.hasActiveFilters) {
@@ -903,10 +949,16 @@ fun GalleryScreen(
                                 ) { item ->
                                     val onItemClick = remember(item.id, onMediaClick) { { onMediaClick(item.id) } }
                                     val onFavClick = remember(item.id, viewModel) { { viewModel.toggleFavorite(item) } }
+                                    val onSelectClick = remember(item.id, viewModel) { { viewModel.toggleSelection(item.id) } }
                                     MediaGridItemCell(
                                         item = item,
                                         onClick = onItemClick,
-                                        onFavoriteClick = onFavClick
+                                        onFavoriteClick = onFavClick,
+                                        isSelected = selectedItemIds.contains(item.id),
+                                        onSelectClick = onSelectClick,
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .aspectRatio(1f)
                                     )
                                 }
                             } else {
@@ -919,10 +971,24 @@ fun GalleryScreen(
                                     if (item != null) {
                                         val onItemClick = remember(item.id, onMediaClick) { { onMediaClick(item.id) } }
                                         val onFavClick = remember(item.id, viewModel) { { viewModel.toggleFavorite(item) } }
+                                        val onSelectClick = remember(item.id, viewModel) { { viewModel.toggleSelection(item.id) } }
                                         MediaGridItemCell(
                                             item = item,
                                             onClick = onItemClick,
-                                            onFavoriteClick = onFavClick
+                                            onFavoriteClick = onFavClick,
+                                            isSelected = selectedItemIds.contains(item.id),
+                                            onSelectClick = onSelectClick,
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .aspectRatio(1f)
+                                        )
+                                    } else {
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .aspectRatio(1f)
+                                                .clip(RoundedCornerShape(2.dp))
+                                                .background(SurfaceCard)
                                         )
                                     }
                                 }
@@ -1071,6 +1137,8 @@ fun MediaGridItemCell(
     item: MediaItem,
     onClick: () -> Unit,
     onFavoriteClick: () -> Unit,
+    isSelected: Boolean = false,
+    onSelectClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -1085,20 +1153,23 @@ fun MediaGridItemCell(
     val imageRequest = remember(context, imageModel) {
         ImageRequest.Builder(context)
             .data(imageModel)
+            .size(300, 300)
             .crossfade(true)
             .build()
     }
 
     val formattedDuration = remember(item.durationMs) { formatDuration(item.durationMs) }
-    val resolutionText = remember(item.width, item.height) { "${item.width}x${item.height}" }
 
     Box(
         modifier = modifier
+            .fillMaxWidth()
             .aspectRatio(1f)
-            .clip(RoundedCornerShape(8.dp))
+            .clip(RoundedCornerShape(2.dp))
             .background(SurfaceCard)
+            .then(
+                if (isSelected) Modifier.border(2.dp, CyanAccent, RoundedCornerShape(2.dp)) else Modifier
+            )
             .clickable { onClick() }
-            .recompositionHighlighter()
             .testTag("media_item_${item.id}")
     ) {
         AsyncImage(
@@ -1108,20 +1179,57 @@ fun MediaGridItemCell(
             modifier = Modifier.fillMaxSize()
         )
 
+        // Semi-transparent selection tint if selected
+        if (isSelected) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(CyanAccent.copy(alpha = 0.25f))
+            )
+        }
+
+        // Selection Overlay Icon (Top-Start / Top-Right corner)
+        Box(
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .padding(4.dp)
+                .size(24.dp)
+                .clip(CircleShape)
+                .background(if (isSelected) CyanAccent else Color.Black.copy(alpha = 0.35f))
+                .clickable { onSelectClick?.invoke() },
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = if (isSelected) Icons.Default.Check else Icons.Default.CheckCircleOutline,
+                contentDescription = "Select",
+                tint = if (isSelected) ObsidianBg else Color.White.copy(alpha = 0.85f),
+                modifier = Modifier.size(14.dp)
+            )
+        }
+
         // Video Badge
         if (item.isVideo) {
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomStart)
-                    .padding(6.dp)
+                    .padding(4.dp)
                     .clip(RoundedCornerShape(4.dp))
-                    .background(Color.Black.copy(alpha = 0.7f))
+                    .background(Color.Black.copy(alpha = 0.65f))
                     .padding(horizontal = 4.dp, vertical = 2.dp)
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(imageVector = Icons.Default.PlayArrow, contentDescription = null, tint = Color.White, modifier = Modifier.size(12.dp))
+                    Icon(
+                        imageVector = Icons.Default.PlayArrow,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(10.dp)
+                    )
                     Spacer(modifier = Modifier.width(2.dp))
-                    Text(formattedDuration, style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp), color = Color.White)
+                    Text(
+                        text = formattedDuration,
+                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+                        color = Color.White
+                    )
                 }
             }
         }
@@ -1131,30 +1239,18 @@ fun MediaGridItemCell(
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
-                    .padding(6.dp)
+                    .padding(4.dp)
                     .clip(RoundedCornerShape(4.dp))
-                    .background(Color.Black.copy(alpha = 0.7f))
-                    .padding(horizontal = 4.dp, vertical = 2.dp)
+                    .background(Color.Black.copy(alpha = 0.65f))
+                    .padding(horizontal = 3.dp, vertical = 2.dp)
             ) {
                 Icon(
                     imageVector = Icons.Default.LocationOn,
                     contentDescription = "GPS",
                     tint = CyanAccent,
-                    modifier = Modifier.size(10.dp)
+                    modifier = Modifier.size(9.dp)
                 )
             }
-        }
-
-        // Resolution Badge
-        Box(
-            modifier = Modifier
-                .align(Alignment.TopStart)
-                .padding(4.dp)
-                .clip(RoundedCornerShape(4.dp))
-                .background(Color.Black.copy(alpha = 0.5f))
-                .padding(horizontal = 4.dp, vertical = 2.dp)
-        ) {
-            Text(resolutionText, color = Color.White, fontSize = 8.sp)
         }
 
         // Favorite Button
@@ -1162,9 +1258,9 @@ fun MediaGridItemCell(
             modifier = Modifier
                 .align(Alignment.TopEnd)
                 .padding(4.dp)
-                .size(28.dp)
+                .size(24.dp)
                 .clip(CircleShape)
-                .background(Color.Black.copy(alpha = 0.4f))
+                .background(Color.Black.copy(alpha = 0.35f))
                 .clickable { onFavoriteClick() },
             contentAlignment = Alignment.Center
         ) {
@@ -1172,7 +1268,7 @@ fun MediaGridItemCell(
                 imageVector = if (item.isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
                 contentDescription = "Favorite",
                 tint = if (item.isFavorite) AmberAccent else Color.White,
-                modifier = Modifier.size(16.dp)
+                modifier = Modifier.size(13.dp)
             )
         }
     }

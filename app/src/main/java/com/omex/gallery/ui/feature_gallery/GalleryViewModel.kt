@@ -42,6 +42,22 @@ class GalleryViewModel(
     private val _searchFilterState = MutableStateFlow(SearchFilterState())
     val searchFilterState: StateFlow<SearchFilterState> = _searchFilterState.asStateFlow()
 
+    private val _selectedItemIds = MutableStateFlow<Set<Long>>(emptySet())
+    val selectedItemIds: StateFlow<Set<Long>> = _selectedItemIds.asStateFlow()
+
+    fun toggleSelection(itemId: Long) {
+        val current = _selectedItemIds.value
+        _selectedItemIds.value = if (current.contains(itemId)) {
+            current - itemId
+        } else {
+            current + itemId
+        }
+    }
+
+    fun clearSelection() {
+        _selectedItemIds.value = emptySet()
+    }
+
     val filterOptions: StateFlow<SearchFilterOptions> = repository.getSearchFilterOptions()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), SearchFilterOptions())
 

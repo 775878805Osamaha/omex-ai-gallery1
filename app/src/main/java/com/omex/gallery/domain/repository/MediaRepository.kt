@@ -28,7 +28,7 @@ interface MediaRepository {
     suspend fun insertMediaItems(items: List<MediaItem>)
     suspend fun deleteMediaItem(id: Long)
     suspend fun toggleFavorite(id: Long, isFavorite: Boolean)
-    suspend fun scanAndIndexGallery(): Result<Int>
+    suspend fun scanAndIndexGallery(isFullReindex: Boolean = false): Result<Int>
     suspend fun regenerateThumbnails(): Result<Int>
 
     // AI Query Methods

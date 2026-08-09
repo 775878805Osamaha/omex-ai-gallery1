@@ -2,7 +2,7 @@
 <resources>
     <string name="app_name">معرض أومكس الذكي</string>
     <string name="app_subtitle">EXIF والذكاء الاصطناعي</string>
-    <string name="search_placeholder">ابحث في بيانات EXIF أو تصنيفات الذكاء الاصطناعي أو أسماء الملفات...</string>
+    <string name="search_placeholder">ابحث في الصور والفيديوهات...</string>
     <string name="clear_all_filters">مسح جميع الفلاتر</string>
     <string name="filter_media_collection">تصفية الوسائط</string>
     <string name="camera_models_exif">طرازات الكاميرا (EXIF)</string>

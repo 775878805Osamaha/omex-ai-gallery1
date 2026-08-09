@@ -100,6 +100,9 @@ interface MediaDao {
     @Query("SELECT * FROM media_items WHERE isIndexed = 0 ORDER BY dateTaken DESC")
     suspend fun getUnindexedMediaList(): List<MediaItemEntity>
 
+    @Query("SELECT * FROM media_items WHERE isAiProcessed = 0 AND isVideo = 0 ORDER BY dateTaken DESC")
+    suspend fun getPendingAiMediaList(): List<MediaItemEntity>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(items: List<MediaItemEntity>)
 
@@ -114,6 +117,9 @@ interface MediaDao {
 
     @Query("UPDATE media_items SET thumbnailPath = :thumbnailPath WHERE id = :id")
     suspend fun updateThumbnail(id: Long, thumbnailPath: String)
+
+    @Query("UPDATE media_items SET isAiProcessed = :isAiProcessed WHERE id = :id")
+    suspend fun updateAiProcessedStatus(id: Long, isAiProcessed: Boolean)
 
     @Query("DELETE FROM media_items WHERE id NOT IN (:validIds)")
     suspend fun deleteRemovedMedia(validIds: List<Long>)

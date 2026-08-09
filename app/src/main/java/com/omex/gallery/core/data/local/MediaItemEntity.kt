@@ -15,6 +15,7 @@ import androidx.room.PrimaryKey
         Index("isFavorite"),
         Index("isVideo"),
         Index("isIndexed"),
+        Index("isAiProcessed"),
         Index("fileName")
     ]
 )
@@ -45,5 +46,6 @@ data class MediaItemEntity(
     val latitude: Double? = null,
     val longitude: Double? = null,
     val isIndexed: Boolean = false,
+    val isAiProcessed: Boolean = false,
     val indexedTimestamp: Long = System.currentTimeMillis()
 )
