@@ -12,20 +12,19 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
-      ANDROID_SDK_ROOT: ${{ runner.home }}/Android/Sdk
-      ANDROID_HOME: ${{ runner.home }}/Android/Sdk
+      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+      ANDROID_HOME: /usr/local/lib/android/sdk
 
     steps:
 
       # ==========================================
-      # 1. Checkout
+      # 1. Checkout repository
       # ==========================================
       - name: Checkout repository
         uses: actions/checkout@v4
 
       # ==========================================
-      # 2. JDK 21
-      # Required by Robolectric for Android SDK 36
+      # 2. Setup JDK 21
       # ==========================================
       - name: Set up JDK 21
         uses: actions/setup-java@v5
@@ -49,60 +48,22 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
 
       # ==========================================
-      # 5. Verify Gradle Wrapper
+      # 5. Make Gradle Wrapper executable
+      # ==========================================
+      - name: Prepare Gradle Wrapper
+        run: |
+          chmod +x ./gradlew
+          ls -la ./gradlew
+
+      # ==========================================
+      # 6. Verify Gradle
       # ==========================================
       - name: Verify Gradle
         run: |
-          chmod +x ./gradlew
           ./gradlew --version
 
       # ==========================================
-      # 6. Install Android SDK
-      # Android API 36 required by compileSdk 36
-      # ==========================================
-      - name: Install Android SDK
-        shell: bash
-        run: |
-          set -eux
-
-          sudo apt-get update
-          sudo apt-get install -y unzip wget
-
-          mkdir -p "$ANDROID_SDK_ROOT/cmdline-tools"
-
-          cd "$HOME"
-
-          TOOL_ZIP="commandlinetools-linux-9477386_latest.zip"
-
-          wget -q \
-            -O "$TOOL_ZIP" \
-            "https://dl.google.com/android/repository/$TOOL_ZIP"
-
-          rm -rf "$ANDROID_SDK_ROOT/cmdline-tools/latest"
-          mkdir -p "$ANDROID_SDK_ROOT/cmdline-tools/latest"
-
-          unzip -q "$TOOL_ZIP" -d "$ANDROID_SDK_ROOT/cmdline-tools/tmp"
-
-          mv \
-            "$ANDROID_SDK_ROOT/cmdline-tools/tmp/cmdline-tools/"* \
-            "$ANDROID_SDK_ROOT/cmdline-tools/latest/"
-
-          rm -rf "$ANDROID_SDK_ROOT/cmdline-tools/tmp"
-          rm -f "$TOOL_ZIP"
-
-          echo "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
-
-          export PATH="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$PATH"
-
-          yes | sdkmanager --licenses || true
-
-          sdkmanager \
-            "platform-tools" \
-            "platforms;android-36" \
-            "build-tools;36.0.0"
-
-      # ==========================================
-      # 7. Verify Android SDK
+      # 7. Verify Android SDK tools
       # ==========================================
       - name: Verify Android SDK
         shell: bash
@@ -112,45 +73,102 @@ jobs:
           echo "ANDROID_HOME=$ANDROID_HOME"
           echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
 
-          sdkmanager --list_installed
+          test -d "$ANDROID_SDK_ROOT"
 
-          test -f "$ANDROID_SDK_ROOT/platforms/android-36/android.jar"
+          if [ ! -x "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" ]; then
+            echo "sdkmanager not found in latest path."
+            echo "Searching for sdkmanager..."
 
-          echo "Android SDK 36 is installed correctly."
+            SDKMANAGER=$(find "$ANDROID_SDK_ROOT" \
+              -type f \
+              -name sdkmanager \
+              2>/dev/null | head -n 1)
+
+            if [ -z "$SDKMANAGER" ]; then
+              echo "ERROR: sdkmanager was not found."
+              exit 1
+            fi
+
+            echo "Found sdkmanager at:"
+            echo "$SDKMANAGER"
+
+            echo "SDKMANAGER_DIR=$(dirname "$SDKMANAGER")" >> "$GITHUB_ENV"
+          else
+            echo "SDKMANAGER_DIR=$ANDROID_SDK_ROOT/cmdline-tools/latest/bin" >> "$GITHUB_ENV"
+          fi
 
       # ==========================================
-      # 8. Make Gradle executable
+      # 8. Install Android SDK 36
       # ==========================================
-      - name: Prepare Gradle Wrapper
+      - name: Install Android SDK 36
+        shell: bash
         run: |
-          chmod +x ./gradlew
-          ls -la ./gradlew
+          set -eux
+
+          SDKMANAGER="$SDKMANAGER_DIR/sdkmanager"
+
+          "$SDKMANAGER" --version
+
+          yes | "$SDKMANAGER" --licenses || true
+
+          "$SDKMANAGER" \
+            "platform-tools" \
+            "platforms;android-36" \
+            "build-tools;36.0.0"
 
       # ==========================================
-      # 9. Run Unit Tests
-      # Robolectric + Android SDK 36
-      # JDK 21 is required
+      # 9. Confirm Android API 36
+      # ==========================================
+      - name: Verify Android API 36
+        shell: bash
+        run: |
+          set -eux
+
+          echo "Checking Android 36..."
+
+          test -f \
+            "$ANDROID_SDK_ROOT/platforms/android-36/android.jar"
+
+          echo "Android 36 android.jar found."
+
+          if [ -d "$ANDROID_SDK_ROOT/build-tools/36.0.0" ]; then
+            echo "Android Build Tools 36.0.0 found."
+          else
+            echo "ERROR: Build Tools 36.0.0 not found."
+            exit 1
+          fi
+
+      # ==========================================
+      # 10. Run Unit Tests
       # ==========================================
       - name: Run Unit Tests
-        run: |
-          ./gradlew testDebugUnitTest \
-            --no-daemon \
-            --rerun-tasks
+        shell: bash
         env:
           JAVA_TOOL_OPTIONS: "-Djava.awt.headless=true"
+        run: |
+          set -o pipefail
+
+          ./gradlew \
+            testDebugUnitTest \
+            --no-daemon \
+            --rerun-tasks \
+            --stacktrace
 
       # ==========================================
-      # 10. Build Debug APK
+      # 11. Build Debug APK
       # ==========================================
       - name: Build Debug APK
-        run: |
-          ./gradlew assembleDebug \
-            --no-daemon
+        shell: bash
         env:
           JAVA_TOOL_OPTIONS: "-Djava.awt.headless=true"
+        run: |
+          ./gradlew \
+            assembleDebug \
+            --no-daemon \
+            --stacktrace
 
       # ==========================================
-      # 11. Verify APK
+      # 12. Verify APK
       # ==========================================
       - name: Verify APK Output
         shell: bash
@@ -164,11 +182,11 @@ jobs:
             exit 1
           fi
 
-          echo "APK successfully generated:"
+          echo "APK generated successfully:"
           ls -lh "$APK_PATH"
 
       # ==========================================
-      # 12. Upload APK
+      # 13. Upload APK
       # ==========================================
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
