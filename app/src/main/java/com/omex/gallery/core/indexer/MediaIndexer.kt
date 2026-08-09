@@ -1,7 +1,7 @@
 package com.omex.gallery.core.indexer
 
-import com.example.domain.model.MediaItem
-import com.example.domain.model.MediaRepository
+import com.omex.gallery.domain.model.MediaItem
+import com.omex.gallery.domain.model.MediaRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.StateFlow
@@ -50,11 +50,32 @@ class MediaIndexer(
                 return@withContext Result.success(0)
             }
 
-            progressTracker.startTracking(itemsToProcess.size)
+            // Immediately persist lightweight records to Room so UI receives them
+            val lightweightItems = itemsToProcess.map { raw ->
+                MediaItem(
+                    id = raw.id,
+                    uriString = raw.contentUri.toString(),
+                    filePath = raw.filePath,
+                    fileName = raw.displayName,
+                    mimeType = raw.mimeType,
+                    isVideo = raw.isVideo,
+                    width = raw.width,
+                    height = raw.height,
+                    sizeBytes = raw.sizeBytes,
+                    dateTaken = raw.dateTaken,
+                    dateModified = raw.dateModified,
+                    durationMs = raw.durationMs,
+                    isFavorite = false,
+                    thumbnailPath = raw.contentUri.toString(),
+                    isIndexed = false
+                )
+            }
+            repository.insertMediaItems(lightweightItems)
 
+            progressTracker.startTracking(itemsToProcess.size)
             var processedCount = 0
 
-            // 4. Process in memory-safe batch chunks
+            // 4. Background enrichment in memory-safe batch chunks
             itemsToProcess.chunked(chunkSize).forEach { chunk ->
                 val processedChunk = mutableListOf<MediaItem>()
 

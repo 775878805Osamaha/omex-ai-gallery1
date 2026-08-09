@@ -4,13 +4,13 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
-import com.example.core.data.local.AiDao
-import com.example.core.data.local.DetectedFaceEntity
-import com.example.core.data.local.DetectedObjectEntity
-import com.example.core.data.local.FaceEmbeddingEntity
-import com.example.core.data.local.ImageClassificationEntity
-import com.example.core.data.local.ImageMetadataEntity
-import com.example.domain.model.MediaItem
+import com.omex.gallery.core.data.local.AiDao
+import com.omex.gallery.core.data.local.DetectedFaceEntity
+import com.omex.gallery.core.data.local.DetectedObjectEntity
+import com.omex.gallery.core.data.local.FaceEmbeddingEntity
+import com.omex.gallery.core.data.local.ImageClassificationEntity
+import com.omex.gallery.core.data.local.ImageMetadataEntity
+import com.omex.gallery.domain.model.MediaItem
 import com.omex.gallery.core.ai.classifier.DefaultImageClassifier
 import com.omex.gallery.core.ai.detector.DefaultObjectDetector
 import com.omex.gallery.core.ai.faces.DefaultFaceDetector
@@ -158,10 +158,25 @@ class AiPipelineExecutor(
         }
     }
 
-    private fun loadBitmap(context: Context, uri: Uri): Bitmap? {
+    private fun loadBitmap(context: Context, uri: Uri, maxDimension: Int = 1024): Bitmap? {
         return try {
-            context.contentResolver.openInputStream(uri)?.use { stream ->
-                BitmapFactory.decodeStream(stream)
+            var inputStream = context.contentResolver.openInputStream(uri) ?: return null
+            val boundsOptions = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            BitmapFactory.decodeStream(inputStream, null, boundsOptions)
+            inputStream.close()
+
+            var sampleSize = 1
+            while (boundsOptions.outWidth / sampleSize > maxDimension || boundsOptions.outHeight / sampleSize > maxDimension) {
+                sampleSize *= 2
+            }
+
+            val secondStream = context.contentResolver.openInputStream(uri)
+            val decodeOptions = BitmapFactory.Options().apply {
+                inSampleSize = sampleSize
+                inPreferredConfig = Bitmap.Config.ARGB_8888
+            }
+            BitmapFactory.decodeStream(secondStream, null, decodeOptions).also {
+                secondStream?.close()
             }
         } catch (e: Exception) {
             null

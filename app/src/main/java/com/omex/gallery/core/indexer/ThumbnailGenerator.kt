@@ -119,6 +119,13 @@ class ThumbnailGenerator(private val context: Context) {
     }
 
     /**
+     * Returns total byte size of cached thumbnails on disk.
+     */
+    fun getThumbnailCacheSize(): Long {
+        return thumbnailDir.listFiles()?.sumOf { it.length() } ?: 0L
+    }
+
+    /**
      * Clears all cached thumbnail files from disk.
      */
     fun clearCache() {

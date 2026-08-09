@@ -1,7 +1,7 @@
 package com.omex.gallery.core.ai.faces
 
 import android.content.Context
-import com.example.core.data.local.AiDao
+import com.omex.gallery.core.data.local.AiDao
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray

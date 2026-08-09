@@ -21,15 +21,33 @@ class IndexScheduler(context: Context) {
     private val workManager = WorkManager.getInstance(context)
 
     /**
-     * Enqueues an immediate one-time indexing work request.
-     *
-     * @param requiresCharging If true, postpones work until device is plugged into power
+     * Enqueues background media synchronization using KEEP policy so active workers are preserved.
      */
-    fun enqueueImmediateIndexing(requiresCharging: Boolean = false) {
+    fun enqueueNormalSync(requiresCharging: Boolean = false) {
         val constraints = Constraints.Builder()
             .setRequiredNetworkType(NetworkType.NOT_REQUIRED)
             .setRequiresCharging(requiresCharging)
-            .setRequiresBatteryNotLow(true)
+            .build()
+
+        val workRequest = OneTimeWorkRequestBuilder<IndexWorker>()
+            .setConstraints(constraints)
+            .addTag(IndexWorker.WORK_NAME)
+            .build()
+
+        workManager.enqueueUniqueWork(
+            IndexWorker.WORK_NAME,
+            ExistingWorkPolicy.KEEP,
+            workRequest
+        )
+    }
+
+    /**
+     * Enqueues explicit full re-indexing work request.
+     */
+    fun enqueueFullReindex(requiresCharging: Boolean = false) {
+        val constraints = Constraints.Builder()
+            .setRequiredNetworkType(NetworkType.NOT_REQUIRED)
+            .setRequiresCharging(requiresCharging)
             .build()
 
         val workRequest = OneTimeWorkRequestBuilder<IndexWorker>()

@@ -1,9 +1,9 @@
 package com.omex.gallery.core.ai.duplicates
 
-import com.example.core.data.local.AiDao
-import com.example.core.data.local.DuplicateGroupEntity
-import com.example.core.data.local.DuplicateMemberEntity
-import com.example.core.data.local.ImageMetadataEntity
+import com.omex.gallery.core.data.local.AiDao
+import com.omex.gallery.core.data.local.DuplicateGroupEntity
+import com.omex.gallery.core.data.local.DuplicateMemberEntity
+import com.omex.gallery.core.data.local.ImageMetadataEntity
 import com.omex.gallery.core.hash.DefaultPerceptualHasher
 import java.util.UUID
 

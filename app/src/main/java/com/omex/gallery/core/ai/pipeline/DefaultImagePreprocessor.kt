@@ -21,7 +21,11 @@ class DefaultImagePreprocessor : ImagePreprocessor {
 
     override fun preprocess(bitmap: Bitmap, options: PreprocessOptions): ByteBuffer {
         val scaledBitmap = prepareScaledBitmap(bitmap, options.targetWidth, options.targetHeight, options.keepAspectRatio)
-        return convertBitmapToBuffer(scaledBitmap, options)
+        val buffer = convertBitmapToBuffer(scaledBitmap, options)
+        if (scaledBitmap != bitmap && !scaledBitmap.isRecycled) {
+            scaledBitmap.recycle()
+        }
+        return buffer
     }
 
     override fun preprocessCrop(
@@ -40,11 +44,16 @@ class DefaultImagePreprocessor : ImagePreprocessor {
         val croppedBitmap = Bitmap.createBitmap(bitmap, safeLeft, safeTop, safeWidth, safeHeight)
         val scaledBitmap = prepareScaledBitmap(croppedBitmap, options.targetWidth, options.targetHeight, options.keepAspectRatio)
         
-        if (croppedBitmap != bitmap && !croppedBitmap.isRecycled) {
+        if (croppedBitmap != bitmap && croppedBitmap != scaledBitmap && !croppedBitmap.isRecycled) {
             croppedBitmap.recycle()
         }
 
-        return convertBitmapToBuffer(scaledBitmap, options)
+        val buffer = convertBitmapToBuffer(scaledBitmap, options)
+        if (scaledBitmap != bitmap && scaledBitmap != croppedBitmap && !scaledBitmap.isRecycled) {
+            scaledBitmap.recycle()
+        }
+
+        return buffer
     }
 
     private fun prepareScaledBitmap(
