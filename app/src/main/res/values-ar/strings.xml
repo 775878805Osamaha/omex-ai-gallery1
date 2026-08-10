@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">معرض أومكس الذكي</string>
+    <string name="app_name">معرض الذكاء الاصطناعي</string>
     <string name="app_subtitle">EXIF والذكاء الاصطناعي</string>
     <string name="search_placeholder">ابحث في بيانات EXIF أو تصنيفات الذكاء الاصطناعي أو أسماء الملفات...</string>
     <string name="clear_all_filters">مسح جميع الفلاتر</string>
@@ -18,8 +18,8 @@
     <string name="found_matching_items">تم العثور على %1$d عنصر مطابِق للفلاتر</string>
     <string name="clear">مسح</string>
     <string name="permission_title">يلزم إذن الوصول إلى الوسائط</string>
-    <string name="permission_desc_tiramisu">يتطلب معرض أومكس الذكي الوصول إلى الصور والفيديوهات لمسح مجموعة الوسائط وتنظيمها وتصنيفها دون اتصال بالإنترنت.</string>
-    <string name="permission_desc_legacy">يتطلب معرض أومكس الذكي الوصول إلى التخزين لمسح وتنظيم الصور والفيديوهات على جهازك.</string>
+    <string name="permission_desc_tiramisu">يتطلب معرض الذكاء الاصطناعي الوصول إلى الصور والفيديوهات لمسح مجموعة الوسائط وتنظيمها وتصنيفها دون اتصال بالإنترنت.</string>
+    <string name="permission_desc_legacy">يتطلب معرض الذكاء الاصطناعي الوصول إلى التخزين لمسح وتنظيم الصور والفيديوهات على جهازك.</string>
     <string name="request_permission">طلب الإذن</string>
     <string name="grant_permission">منح الإذن</string>
     <string name="app_settings">إعدادات التطبيق</string>

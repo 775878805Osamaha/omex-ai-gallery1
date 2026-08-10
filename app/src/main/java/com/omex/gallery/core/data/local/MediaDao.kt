@@ -44,7 +44,7 @@ interface MediaDao {
     @Query("SELECT * FROM media_items WHERE id = :id LIMIT 1")
     suspend fun getMediaById(id: Long): MediaItemEntity?
 
-    @Query("SELECT * FROM media_items WHERE fileName LIKE '%' || :query || '%' OR cameraModel LIKE '%' || :query || '%' ORDER BY dateTaken DESC")
+    @Query("SELECT DISTINCT m.* FROM media_items m LEFT JOIN ocr_text_results ocr ON m.id = ocr.mediaId WHERE m.fileName LIKE '%' || :query || '%' OR m.cameraModel LIKE '%' || :query || '%' OR ocr.extractedText LIKE '%' || :query || '%' ORDER BY m.dateTaken DESC")
     fun searchMedia(query: String): Flow<List<MediaItemEntity>>
 
     @Query("""
@@ -52,6 +52,7 @@ interface MediaDao {
         LEFT JOIN image_metadata meta ON m.id = meta.mediaId
         LEFT JOIN image_classifications c ON m.id = c.mediaId
         LEFT JOIN detected_objects o ON m.id = o.mediaId
+        LEFT JOIN ocr_text_results ocr ON m.id = ocr.mediaId
         WHERE 
             (:query = '' OR (
                 m.fileName LIKE '%' || :query || '%' OR
@@ -67,7 +68,8 @@ interface MediaDao {
                 meta.focalLength LIKE '%' || :query || '%' OR
                 c.label LIKE '%' || :query || '%' OR
                 c.category LIKE '%' || :query || '%' OR
-                o.labelName LIKE '%' || :query || '%'
+                o.labelName LIKE '%' || :query || '%' OR
+                ocr.extractedText LIKE '%' || :query || '%'
             ))
             AND (:cameraModel IS NULL OR :cameraModel = '' OR m.cameraModel = :cameraModel OR meta.cameraModel = :cameraModel)
             AND (:cameraMake IS NULL OR :cameraMake = '' OR m.cameraMake = :cameraMake OR meta.cameraMake = :cameraMake)

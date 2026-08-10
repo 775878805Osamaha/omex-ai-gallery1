@@ -22,6 +22,6 @@ dependencyResolutionManagement {
   }
 }
 
-rootProject.name = "OMEX AI Gallery"
+rootProject.name = "AI Gallery"
 
 include(":app")

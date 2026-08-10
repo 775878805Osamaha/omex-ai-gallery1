@@ -36,6 +36,7 @@ interface MediaRepository {
     suspend fun getObjectsForMedia(mediaId: Long): List<AiObject>
     suspend fun getFacesForMedia(mediaId: Long): List<AiFace>
     suspend fun getMetadataForMedia(mediaId: Long): AiMetadata?
+    suspend fun getOcrTextForMedia(mediaId: Long): AiOcrText?
     suspend fun getMediaItemWithAi(mediaId: Long): MediaItemWithAi?
 
     fun getDuplicateGroups(): Flow<List<DuplicateGroupWithMedia>>

@@ -48,6 +48,15 @@ data class AiMetadata(
     val longitude: Double? = null
 )
 
+data class AiOcrText(
+    val id: Long = 0,
+    val mediaId: Long,
+    val extractedText: String,
+    val language: String? = null,
+    val processingStatus: String = "COMPLETED",
+    val modelVersion: String = "1.0.0"
+)
+
 data class DuplicateGroupWithMedia(
     val groupId: String,
     val groupType: String,
@@ -72,6 +81,7 @@ data class MediaItemWithAi(
     val objects: List<AiObject>,
     val faces: List<AiFace>,
     val metadata: AiMetadata? = null,
+    val ocrText: AiOcrText? = null,
     val duplicateGroupId: String? = null
 )
 

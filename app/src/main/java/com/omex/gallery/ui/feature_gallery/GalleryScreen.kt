@@ -32,10 +32,12 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import java.io.File
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
@@ -46,18 +48,25 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CheckCircleOutline
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.CopyAll
+import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.FilterList
+import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.GridOn
+import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.Image
-import androidx.compose.material.icons.filled.Label
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.SelectAll
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Sort
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
@@ -65,6 +74,8 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
@@ -72,6 +83,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -82,10 +96,9 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -101,22 +114,19 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.paging.compose.collectAsLazyPagingItems
-import androidx.paging.compose.itemContentType
-import androidx.paging.compose.itemKey
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.PermissionStatus
 import com.google.accompanist.permissions.rememberMultiplePermissionsState
 import com.omex.gallery.R
+import com.omex.gallery.domain.model.Album
+import com.omex.gallery.domain.model.AlbumType
 import com.omex.gallery.domain.model.DuplicateGroupWithMedia
 import com.omex.gallery.domain.model.IndexingStatus
 import com.omex.gallery.domain.model.MediaItem
-import com.omex.gallery.ui.util.recompositionHighlighter
 import com.omex.gallery.domain.model.PersonGroup
-import com.omex.gallery.domain.model.SearchFilterOptions
-import com.omex.gallery.domain.model.SearchFilterState
+import com.omex.gallery.domain.model.SortOrder
 import com.omex.gallery.ui.theme.AmberAccent
 import com.omex.gallery.ui.theme.CyanAccent
 import com.omex.gallery.ui.theme.ObsidianBg
@@ -124,7 +134,8 @@ import com.omex.gallery.ui.theme.SurfaceCard
 import com.omex.gallery.ui.theme.SurfaceDark
 import com.omex.gallery.ui.theme.TextMutedDark
 import com.omex.gallery.ui.theme.TextPrimaryDark
-import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
 import java.util.Locale
 
 fun translateMlCategoryOrLabel(tag: String): String {
@@ -153,12 +164,18 @@ fun translatePersonName(name: String): String {
 fun GalleryScreen(
     viewModel: GalleryViewModel,
     onMediaClick: (Long) -> Unit,
-    onOpenIndexingStatus: () -> Unit
+    onOpenIndexingStatus: () -> Unit,
+    onOpenSearch: () -> Unit = {},
+    onOpenAiChat: () -> Unit = {}
 ) {
     val context = LocalContext.current
-    val pagedItems = viewModel.pagedMediaItems.collectAsLazyPagingItems()
+    val navTab by viewModel.selectedNavTab.collectAsStateWithLifecycle()
     val mediaItems by viewModel.mediaItems.collectAsStateWithLifecycle()
     val selectedTab by viewModel.selectedTab.collectAsStateWithLifecycle()
+    val sortOrder by viewModel.sortOrder.collectAsStateWithLifecycle()
+    val selectedAlbum by viewModel.selectedAlbum.collectAsStateWithLifecycle()
+    val albums by viewModel.albums.collectAsStateWithLifecycle()
+    val columnCount by viewModel.gridColumnCount.collectAsStateWithLifecycle()
     val searchFilterState by viewModel.searchFilterState.collectAsStateWithLifecycle()
     val filterOptions by viewModel.filterOptions.collectAsStateWithLifecycle()
     val indexingProgress by viewModel.indexingProgress.collectAsStateWithLifecycle()
@@ -166,8 +183,8 @@ fun GalleryScreen(
     val duplicateGroups by viewModel.duplicateGroups.collectAsStateWithLifecycle()
     val selectedItemIds by viewModel.selectedItemIds.collectAsStateWithLifecycle()
 
-    var isSearchActive by remember { mutableStateOf(true) }
     var isFilterPanelExpanded by remember { mutableStateOf(false) }
+    var isSortMenuExpanded by remember { mutableStateOf(false) }
 
     val permissionsToRequest = remember {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
@@ -182,9 +199,7 @@ fun GalleryScreen(
                 Manifest.permission.READ_MEDIA_VIDEO
             )
         } else {
-            listOf(
-                Manifest.permission.READ_EXTERNAL_STORAGE
-            )
+            listOf(Manifest.permission.READ_EXTERNAL_STORAGE)
         }
     }
 
@@ -211,20 +226,6 @@ fun GalleryScreen(
             }
         }
     }
-
-    val isPartialPermissionGranted = remember(permissionsState.permissions) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            val userSelected = permissionsState.permissions.find { it.permission == "android.permission.READ_MEDIA_VISUAL_USER_SELECTED" }
-            val fullImages = permissionsState.permissions.find { it.permission == Manifest.permission.READ_MEDIA_IMAGES }
-            val fullVideos = permissionsState.permissions.find { it.permission == Manifest.permission.READ_MEDIA_VIDEO }
-            userSelected?.status is PermissionStatus.Granted &&
-                    (fullImages?.status !is PermissionStatus.Granted || fullVideos?.status !is PermissionStatus.Granted)
-        } else {
-            false
-        }
-    }
-
-    val shouldShowRationale = permissionsState.shouldShowRationale
 
     Scaffold(
         topBar = {
@@ -268,26 +269,92 @@ fun GalleryScreen(
                     }
                 },
                 actions = {
+                    // Open Local AI Chat
                     IconButton(
-                        onClick = { viewModel.triggerAiScan(context) },
-                        modifier = Modifier.testTag("run_full_ai_scan_button")
+                        onClick = onOpenAiChat,
+                        modifier = Modifier.testTag("open_ai_chat_button")
                     ) {
                         Icon(
                             imageVector = Icons.Default.AutoAwesome,
-                            contentDescription = "AI Scan",
+                            contentDescription = stringResource(R.string.ai_chat_title),
                             tint = AmberAccent
                         )
                     }
+
+                    // Open Local OCR Text Search
                     IconButton(
-                        onClick = { isSearchActive = !isSearchActive },
-                        modifier = Modifier.testTag("search_button")
+                        onClick = onOpenSearch,
+                        modifier = Modifier.testTag("open_ocr_search_button")
                     ) {
                         Icon(
                             imageVector = Icons.Default.Search,
-                            contentDescription = "Search",
-                            tint = if (isSearchActive) CyanAccent else TextPrimaryDark
+                            contentDescription = stringResource(R.string.search_title),
+                            tint = Color.White
                         )
                     }
+
+                    if (navTab == NavTab.GALLERY) {
+                        // Toggle Column Count
+                        IconButton(
+                            onClick = { viewModel.toggleGridColumnCount() },
+                            modifier = Modifier.testTag("toggle_grid_columns_button")
+                        ) {
+                            Icon(
+                                imageVector = if (columnCount == 2) Icons.Default.GridView else Icons.Default.GridOn,
+                                contentDescription = "Grid Columns",
+                                tint = TextPrimaryDark
+                            )
+                        }
+
+                        // Sorting Dropdown
+                        Box {
+                            IconButton(
+                                onClick = { isSortMenuExpanded = true },
+                                modifier = Modifier.testTag("sort_menu_button")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Sort,
+                                    contentDescription = "Sort",
+                                    tint = CyanAccent
+                                )
+                            }
+                            DropdownMenu(
+                                expanded = isSortMenuExpanded,
+                                onDismissRequest = { isSortMenuExpanded = false },
+                                modifier = Modifier.background(SurfaceDark)
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text("الأحدث أولاً (Newest)", color = TextPrimaryDark) },
+                                    onClick = {
+                                        viewModel.setSortOrder(SortOrder.NEWEST_FIRST)
+                                        isSortMenuExpanded = false
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("الأقدم أولاً (Oldest)", color = TextPrimaryDark) },
+                                    onClick = {
+                                        viewModel.setSortOrder(SortOrder.OLDEST_FIRST)
+                                        isSortMenuExpanded = false
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("الأكبر حجماً (Largest)", color = TextPrimaryDark) },
+                                    onClick = {
+                                        viewModel.setSortOrder(SortOrder.LARGEST_FIRST)
+                                        isSortMenuExpanded = false
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("الأصغر حجماً (Smallest)", color = TextPrimaryDark) },
+                                    onClick = {
+                                        viewModel.setSortOrder(SortOrder.SMALLEST_FIRST)
+                                        isSortMenuExpanded = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+
                     IconButton(
                         onClick = onOpenIndexingStatus,
                         modifier = Modifier.testTag("indexing_status_button")
@@ -298,6 +365,7 @@ fun GalleryScreen(
                             tint = TextPrimaryDark
                         )
                     }
+
                     IconButton(
                         onClick = { viewModel.triggerGalleryScan(context) },
                         modifier = Modifier.testTag("refresh_scan_button")
@@ -312,6 +380,69 @@ fun GalleryScreen(
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = SurfaceDark)
             )
         },
+        bottomBar = {
+            NavigationBar(
+                containerColor = SurfaceDark,
+                contentColor = TextPrimaryDark
+            ) {
+                NavigationBarItem(
+                    selected = navTab == NavTab.GALLERY,
+                    onClick = { viewModel.selectNavTab(NavTab.GALLERY) },
+                    icon = { Icon(Icons.Default.PhotoLibrary, contentDescription = "Gallery") },
+                    label = { Text("الوسائط", fontSize = 11.sp, fontWeight = FontWeight.Bold) },
+                    colors = NavigationBarItemDefaults.colors(
+                        selectedIconColor = ObsidianBg,
+                        selectedTextColor = CyanAccent,
+                        indicatorColor = CyanAccent,
+                        unselectedIconColor = TextMutedDark,
+                        unselectedTextColor = TextMutedDark
+                    ),
+                    modifier = Modifier.testTag("nav_gallery_tab")
+                )
+                NavigationBarItem(
+                    selected = navTab == NavTab.ALBUMS,
+                    onClick = { viewModel.selectNavTab(NavTab.ALBUMS) },
+                    icon = { Icon(Icons.Default.Folder, contentDescription = "Albums") },
+                    label = { Text("الألبومات", fontSize = 11.sp, fontWeight = FontWeight.Bold) },
+                    colors = NavigationBarItemDefaults.colors(
+                        selectedIconColor = ObsidianBg,
+                        selectedTextColor = AmberAccent,
+                        indicatorColor = AmberAccent,
+                        unselectedIconColor = TextMutedDark,
+                        unselectedTextColor = TextMutedDark
+                    ),
+                    modifier = Modifier.testTag("nav_albums_tab")
+                )
+                NavigationBarItem(
+                    selected = navTab == NavTab.SEARCH,
+                    onClick = { viewModel.selectNavTab(NavTab.SEARCH) },
+                    icon = { Icon(Icons.Default.Search, contentDescription = "Search") },
+                    label = { Text("البحث", fontSize = 11.sp, fontWeight = FontWeight.Bold) },
+                    colors = NavigationBarItemDefaults.colors(
+                        selectedIconColor = ObsidianBg,
+                        selectedTextColor = CyanAccent,
+                        indicatorColor = CyanAccent,
+                        unselectedIconColor = TextMutedDark,
+                        unselectedTextColor = TextMutedDark
+                    ),
+                    modifier = Modifier.testTag("nav_search_tab")
+                )
+                NavigationBarItem(
+                    selected = navTab == NavTab.AI_STUDIO,
+                    onClick = { viewModel.selectNavTab(NavTab.AI_STUDIO) },
+                    icon = { Icon(Icons.Default.AutoAwesome, contentDescription = "AI Studio") },
+                    label = { Text("استوديو AI", fontSize = 11.sp, fontWeight = FontWeight.Bold) },
+                    colors = NavigationBarItemDefaults.colors(
+                        selectedIconColor = ObsidianBg,
+                        selectedTextColor = AmberAccent,
+                        indicatorColor = AmberAccent,
+                        unselectedIconColor = TextMutedDark,
+                        unselectedTextColor = TextMutedDark
+                    ),
+                    modifier = Modifier.testTag("nav_aistudio_tab")
+                )
+            }
+        },
         containerColor = ObsidianBg
     ) { innerPadding ->
         Column(
@@ -319,38 +450,207 @@ fun GalleryScreen(
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
-            // Expanded Search & Filter Controls
-            AnimatedVisibility(visible = isSearchActive) {
-                Column(
+            // Batch Selection Floating Toolbar
+            if (selectedItemIds.isNotEmpty()) {
+                Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(SurfaceDark)
-                        .padding(bottom = 8.dp)
+                        .background(AmberAccent.copy(alpha = 0.25f))
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Search Bar Row with Filter Drawer Toggle
-                    Row(
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        IconButton(onClick = { viewModel.clearSelection() }) {
+                            Icon(Icons.Default.Close, contentDescription = "Clear", tint = AmberAccent)
+                        }
+                        Text(
+                            text = "${selectedItemIds.size} عنصر محدد",
+                            color = TextPrimaryDark,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp
+                        )
+                    }
+
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        IconButton(onClick = { viewModel.selectAll(mediaItems) }) {
+                            Icon(Icons.Default.SelectAll, contentDescription = "Select All", tint = CyanAccent)
+                        }
+                        IconButton(onClick = { viewModel.favoriteSelected() }) {
+                            Icon(Icons.Default.Favorite, contentDescription = "Favorite Selected", tint = AmberAccent)
+                        }
+                        IconButton(onClick = { viewModel.deleteSelected() }) {
+                            Icon(Icons.Default.Delete, contentDescription = "Delete Selected", tint = Color.Red)
+                        }
+                    }
+                }
+            }
+
+            // Screen Content according to active Navigation Tab
+            when (navTab) {
+                NavTab.GALLERY -> {
+                    // Selected Album Banner
+                    if (selectedAlbum != null) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(SurfaceDark)
+                                .padding(horizontal = 16.dp, vertical = 6.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "ألبوم: ${selectedAlbum!!.title} (${selectedAlbum!!.itemCount})",
+                                color = AmberAccent,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 13.sp
+                            )
+                            IconButton(onClick = { viewModel.selectAlbum(null) }) {
+                                Icon(Icons.Default.Close, contentDescription = "Clear Album", tint = TextMutedDark, modifier = Modifier.size(18.dp))
+                            }
+                        }
+                    }
+
+                    // Gallery Filter Chips Row
+                    LazyRow(
+                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        MediaFilterTab.entries.forEach { tab ->
+                            val isSelected = selectedTab == tab
+                            item {
+                                FilterChip(
+                                    selected = isSelected,
+                                    onClick = { viewModel.selectTab(tab) },
+                                    label = {
+                                        Text(
+                                            text = when (tab) {
+                                                MediaFilterTab.ALL -> "${stringResource(R.string.tab_all)} (${mediaItems.size})"
+                                                MediaFilterTab.PHOTOS -> stringResource(R.string.tab_photos)
+                                                MediaFilterTab.VIDEOS -> stringResource(R.string.tab_videos)
+                                                MediaFilterTab.FAVORITES -> stringResource(R.string.tab_favorites)
+                                                MediaFilterTab.PEOPLE -> "${stringResource(R.string.tab_people)} (${personGroups.size})"
+                                                MediaFilterTab.DUPLICATES -> "${stringResource(R.string.tab_duplicates)} (${duplicateGroups.size})"
+                                            },
+                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                        )
+                                    },
+                                    colors = FilterChipDefaults.filterChipColors(
+                                        selectedContainerColor = CyanAccent,
+                                        selectedLabelColor = ObsidianBg,
+                                        containerColor = SurfaceCard,
+                                        labelColor = TextPrimaryDark
+                                    ),
+                                    border = null,
+                                    shape = RoundedCornerShape(20.dp),
+                                    modifier = Modifier.testTag("tab_${tab.name.lowercase()}")
+                                )
+                            }
+                        }
+                    }
+
+                    if (mediaItems.isEmpty()) {
+                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Icon(Icons.Default.Image, contentDescription = null, tint = TextMutedDark, modifier = Modifier.size(64.dp))
+                                Spacer(modifier = Modifier.height(12.dp))
+                                Text("لا توجد وسائط متاح حالياً", color = TextMutedDark, fontWeight = FontWeight.Medium)
+                            }
+                        }
+                    } else {
+                        // Date Grouped Gallery Grid
+                        val grouped = remember(mediaItems) { groupMediaByDate(mediaItems) }
+                        LazyVerticalGrid(
+                            columns = GridCells.Fixed(columnCount),
+                            contentPadding = PaddingValues(8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp),
+                            modifier = Modifier.fillMaxSize().testTag("gallery_media_grid")
+                        ) {
+                            grouped.forEach { (dateHeader, items) ->
+                                item(span = { GridItemSpan(columnCount) }) {
+                                    Text(
+                                        text = dateHeader,
+                                        color = CyanAccent,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 13.sp,
+                                        modifier = Modifier.padding(start = 8.dp, top = 12.dp, bottom = 4.dp)
+                                    )
+                                }
+                                items(items, key = { it.id }) { item ->
+                                    val isSelected = selectedItemIds.contains(item.id)
+                                    MediaGridTile(
+                                        item = item,
+                                        isSelected = isSelected,
+                                        onClick = {
+                                            if (selectedItemIds.isNotEmpty()) {
+                                                viewModel.toggleSelection(item.id)
+                                            } else {
+                                                onMediaClick(item.id)
+                                            }
+                                        },
+                                        onLongClick = { viewModel.toggleSelection(item.id) }
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                NavTab.ALBUMS -> {
+                    Column(modifier = Modifier.fillMaxSize().padding(12.dp)) {
+                        Text(
+                            text = "الألبومات والمجلدات الذكية",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = TextPrimaryDark,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(bottom = 12.dp)
+                        )
+
+                        if (albums.isEmpty()) {
+                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                Text("لا توجد ألبومات متاح حالياً", color = TextMutedDark)
+                            }
+                        } else {
+                            LazyVerticalGrid(
+                                columns = GridCells.Fixed(2),
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                verticalArrangement = Arrangement.spacedBy(10.dp),
+                                modifier = Modifier.fillMaxSize().testTag("albums_grid")
+                            ) {
+                                items(albums, key = { it.id }) { album ->
+                                    AlbumCardTile(
+                                        album = album,
+                                        onClick = { viewModel.selectAlbum(album) }
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                NavTab.SEARCH -> {
+                    Column(
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 12.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                            .fillMaxSize()
+                            .padding(12.dp)
                     ) {
                         OutlinedTextField(
                             value = searchFilterState.query,
                             onValueChange = { viewModel.updateSearchQuery(it) },
-                            placeholder = { Text(stringResource(R.string.search_placeholder), color = TextMutedDark, fontSize = 13.sp) },
-                            leadingIcon = {
-                                Icon(imageVector = Icons.Default.Search, contentDescription = null, tint = CyanAccent)
-                            },
+                            placeholder = { Text("ابحث في الصور والفيديوهات بالاسم أو المعلمات...", color = TextMutedDark, fontSize = 13.sp) },
+                            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = CyanAccent) },
                             trailingIcon = {
                                 if (searchFilterState.query.isNotEmpty()) {
                                     IconButton(onClick = { viewModel.updateSearchQuery("") }) {
-                                        Icon(imageVector = Icons.Default.Clear, contentDescription = stringResource(R.string.clear), tint = TextMutedDark)
+                                        Icon(Icons.Default.Clear, contentDescription = "Clear", tint = TextMutedDark)
                                     }
                                 }
                             },
                             modifier = Modifier
-                                .weight(1f)
-                                .testTag("search_text_input"),
+                                .fillMaxWidth()
+                                .testTag("search_tab_input"),
                             singleLine = true,
                             colors = OutlinedTextFieldDefaults.colors(
                                 focusedContainerColor = SurfaceCard,
@@ -363,634 +663,98 @@ fun GalleryScreen(
                             shape = RoundedCornerShape(12.dp)
                         )
 
-                        Spacer(modifier = Modifier.width(8.dp))
+                        Spacer(modifier = Modifier.height(12.dp))
 
-                        // Advanced Filter Tune Button with Badge
-                        IconButton(
-                            onClick = { isFilterPanelExpanded = !isFilterPanelExpanded },
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(if (isFilterPanelExpanded || searchFilterState.hasActiveFilters) CyanAccent.copy(alpha = 0.2f) else SurfaceCard)
-                                .testTag("toggle_advanced_filter_button")
-                        ) {
-                            if (searchFilterState.activeFilterCount > 0) {
-                                BadgedBox(
-                                    badge = {
-                                        Badge(containerColor = AmberAccent, contentColor = ObsidianBg) {
-                                            Text(searchFilterState.activeFilterCount.toString(), fontWeight = FontWeight.Bold)
-                                        }
-                                    }
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Tune,
-                                        contentDescription = stringResource(R.string.filter_media_collection),
-                                        tint = CyanAccent
-                                    )
-                                }
-                            } else {
-                                Icon(
-                                    imageVector = Icons.Default.Tune,
-                                    contentDescription = stringResource(R.string.filter_media_collection),
-                                    tint = if (isFilterPanelExpanded) CyanAccent else TextPrimaryDark
-                                )
-                            }
-                        }
-                    }
-
-                    // Active Filters Bar
-                    if (searchFilterState.hasActiveFilters) {
-                        LazyRow(
-                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                            modifier = Modifier.fillMaxWidth().testTag("active_filter_chips_row")
-                        ) {
-                            item {
-                                Box(
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(16.dp))
-                                        .background(AmberAccent.copy(alpha = 0.2f))
-                                        .clickable { viewModel.clearAllFilters() }
-                                        .padding(horizontal = 10.dp, vertical = 4.dp)
-                                ) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Icon(imageVector = Icons.Default.Close, contentDescription = null, tint = AmberAccent, modifier = Modifier.size(14.dp))
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        Text(stringResource(R.string.clear_all_filters), color = AmberAccent, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                    }
-                                }
-                            }
-
-                            if (searchFilterState.query.isNotBlank()) {
-                                item {
-                                    ActiveFilterChip(label = stringResource(R.string.search_label, searchFilterState.query)) {
-                                        viewModel.updateSearchQuery("")
-                                    }
-                                }
-                            }
-
-                            searchFilterState.cameraModel?.let { model ->
-                                item {
-                                    ActiveFilterChip(label = stringResource(R.string.camera_label, model)) {
-                                        viewModel.setCameraModelFilter(null)
-                                    }
-                                }
-                            }
-
-                            searchFilterState.cameraMake?.let { make ->
-                                item {
-                                    ActiveFilterChip(label = stringResource(R.string.make_label, make)) {
-                                        viewModel.setCameraMakeFilter(null)
-                                    }
-                                }
-                            }
-
-                            searchFilterState.mlCategory?.let { category ->
-                                item {
-                                    ActiveFilterChip(label = stringResource(R.string.category_label, translateMlCategoryOrLabel(category))) {
-                                        viewModel.setMlCategoryFilter(null)
-                                    }
-                                }
-                            }
-
-                            searchFilterState.mlLabel?.let { tag ->
-                                item {
-                                    ActiveFilterChip(label = stringResource(R.string.ml_tag_label, translateMlCategoryOrLabel(tag))) {
-                                        viewModel.setMlLabelFilter(null)
-                                    }
-                                }
-                            }
-
-                            if (searchFilterState.isGpsOnly) {
-                                item {
-                                    ActiveFilterChip(label = stringResource(R.string.gps_location_chip)) {
-                                        viewModel.toggleGpsOnlyFilter()
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    // Quick Tag Suggestions Bar
-                    LazyRow(
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        modifier = Modifier.fillMaxWidth().testTag("quick_tag_suggestions_row")
-                    ) {
-                        item {
-                            QuickTagChip(
-                                label = "📍 GPS",
-                                isSelected = searchFilterState.isGpsOnly,
-                                onClick = { viewModel.toggleGpsOnlyFilter() }
-                            )
-                        }
-
-                        // Default / Discovered Categories
-                        val popularCategories = listOf("Animal", "Vehicle", "Food", "Nature", "Object", "Person", "Fish")
-                        popularCategories.forEach { cat ->
-                            item {
-                                QuickTagChip(
-                                    label = "🏷️ ${translateMlCategoryOrLabel(cat)}",
-                                    isSelected = searchFilterState.mlCategory == cat,
-                                    onClick = { viewModel.setMlCategoryFilter(cat) }
-                                )
-                            }
-                        }
-
-                        // Popular TFLite ML labels if present
-                        filterOptions.mlLabels.take(10).forEach { tag ->
-                            item {
-                                QuickTagChip(
-                                    label = "🔍 ${translateMlCategoryOrLabel(tag)}",
-                                    isSelected = searchFilterState.mlLabel == tag,
-                                    onClick = { viewModel.setMlLabelFilter(tag) }
-                                )
-                            }
-                        }
-                    }
-
-                    // Expandable Advanced Filter Panel Drawer
-                    AnimatedVisibility(
-                        visible = isFilterPanelExpanded,
-                        enter = expandVertically() + fadeIn(),
-                        exit = shrinkVertically() + fadeOut()
-                    ) {
-                        Card(
-                            colors = CardDefaults.cardColors(containerColor = SurfaceCard),
-                            shape = RoundedCornerShape(16.dp),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 12.dp, vertical = 6.dp)
-                                .testTag("advanced_filter_panel")
-                        ) {
-                            Column(modifier = Modifier.padding(14.dp)) {
-                                Text(
-                                    text = stringResource(R.string.filter_media_collection),
-                                    style = MaterialTheme.typography.titleSmall,
-                                    color = CyanAccent,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Spacer(modifier = Modifier.height(10.dp))
-
-                                // EXIF Camera Models Section
-                                if (filterOptions.cameraModels.isNotEmpty()) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Icon(imageVector = Icons.Default.CameraAlt, contentDescription = null, tint = AmberAccent, modifier = Modifier.size(16.dp))
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text(stringResource(R.string.camera_models_exif), color = TextPrimaryDark, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                                    }
-                                    Spacer(modifier = Modifier.height(4.dp))
-                                    FlowRow(
-                                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                        verticalArrangement = Arrangement.spacedBy(4.dp)
-                                    ) {
-                                        filterOptions.cameraModels.forEach { model ->
-                                            FilterChip(
-                                                selected = searchFilterState.cameraModel == model,
-                                                onClick = { viewModel.setCameraModelFilter(model) },
-                                                label = { Text(model, fontSize = 11.sp) },
-                                                colors = FilterChipDefaults.filterChipColors(
-                                                    selectedContainerColor = AmberAccent,
-                                                    selectedLabelColor = ObsidianBg,
-                                                    containerColor = SurfaceDark,
-                                                    labelColor = TextPrimaryDark
-                                                ),
-                                                border = null,
-                                                shape = RoundedCornerShape(12.dp)
-                                            )
-                                        }
-                                    }
-                                    Spacer(modifier = Modifier.height(10.dp))
-                                }
-
-                                // TFLite ML Categories Section
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(imageVector = Icons.Default.Category, contentDescription = null, tint = CyanAccent, modifier = Modifier.size(16.dp))
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text(stringResource(R.string.tflite_ml_categories), color = TextPrimaryDark, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                                }
-                                Spacer(modifier = Modifier.height(4.dp))
-                                FlowRow(
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                                ) {
-                                    val availableCats = (filterOptions.mlCategories + listOf("Animal", "Vehicle", "Food", "Nature", "Object", "Fish")).distinct()
-                                    availableCats.forEach { category ->
-                                        FilterChip(
-                                            selected = searchFilterState.mlCategory == category,
-                                            onClick = { viewModel.setMlCategoryFilter(category) },
-                                            label = { Text(translateMlCategoryOrLabel(category), fontSize = 11.sp) },
-                                            colors = FilterChipDefaults.filterChipColors(
-                                                selectedContainerColor = CyanAccent,
-                                                selectedLabelColor = ObsidianBg,
-                                                containerColor = SurfaceDark,
-                                                labelColor = TextPrimaryDark
-                                            ),
-                                            border = null,
-                                            shape = RoundedCornerShape(12.dp)
-                                        )
-                                    }
-                                }
-
-                                Spacer(modifier = Modifier.height(10.dp))
-
-                                // GPS Toggle
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Icon(imageVector = Icons.Default.LocationOn, contentDescription = null, tint = CyanAccent, modifier = Modifier.size(16.dp))
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text(stringResource(R.string.gps_only), color = TextPrimaryDark, fontSize = 12.sp)
-                                    }
-                                    Switch(
-                                        checked = searchFilterState.isGpsOnly,
-                                        onCheckedChange = { viewModel.toggleGpsOnlyFilter() },
-                                        colors = SwitchDefaults.colors(
-                                            checkedThumbColor = ObsidianBg,
-                                            checkedTrackColor = CyanAccent,
-                                            uncheckedThumbColor = TextMutedDark,
-                                            uncheckedTrackColor = SurfaceDark
-                                        ),
-                                        modifier = Modifier.testTag("gps_only_switch")
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Filter Tabs Row
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 6.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                MediaFilterTab.entries.forEach { tab ->
-                    val isSelected = selectedTab == tab
-                    FilterChip(
-                        selected = isSelected,
-                        onClick = { viewModel.selectTab(tab) },
-                        label = {
-                            Text(
-                                text = when (tab) {
-                                    MediaFilterTab.ALL -> if (searchFilterState.hasActiveFilters) "${stringResource(R.string.tab_results)} (${mediaItems.size})" else "${stringResource(R.string.tab_all)} (${mediaItems.size})"
-                                    MediaFilterTab.PHOTOS -> stringResource(R.string.tab_photos)
-                                    MediaFilterTab.VIDEOS -> stringResource(R.string.tab_videos)
-                                    MediaFilterTab.FAVORITES -> stringResource(R.string.tab_favorites)
-                                    MediaFilterTab.PEOPLE -> "${stringResource(R.string.tab_people)} (${personGroups.size})"
-                                    MediaFilterTab.DUPLICATES -> "${stringResource(R.string.tab_duplicates)} (${duplicateGroups.size})"
-                                },
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-                            )
-                        },
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = CyanAccent,
-                            selectedLabelColor = ObsidianBg,
-                            containerColor = SurfaceCard,
-                            labelColor = TextPrimaryDark
-                        ),
-                        border = null,
-                        shape = RoundedCornerShape(20.dp),
-                        modifier = Modifier.testTag("tab_${tab.name.lowercase()}")
-                    )
-                }
-            }
-
-            // Indexing Status Banner
-            if (indexingProgress.status == IndexingStatus.SCANNING ||
-                indexingProgress.status == IndexingStatus.GENERATING_THUMBNAILS ||
-                indexingProgress.status == IndexingStatus.INDEXING_EXIF
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(SurfaceDark)
-                        .padding(horizontal = 16.dp, vertical = 8.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = indexingProgress.message,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = CyanAccent,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f)
-                        )
-                        if (indexingProgress.totalCount > 0) {
-                            Text(
-                                text = "${indexingProgress.scannedCount}/${indexingProgress.totalCount}",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = TextPrimaryDark
-                            )
-                        }
-                    }
-                    Spacer(modifier = Modifier.height(4.dp))
-                    LinearProgressIndicator(
-                        modifier = Modifier.fillMaxWidth(),
-                        color = CyanAccent,
-                        trackColor = SurfaceCard
-                    )
-                }
-            }
-
-            // Active Filter Result Count Banner
-            if (searchFilterState.hasActiveFilters) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 4.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = stringResource(R.string.found_matching_items, mediaItems.size),
-                        fontSize = 12.sp,
-                        color = CyanAccent,
-                        fontWeight = FontWeight.Medium
-                    )
-                    Text(
-                        text = stringResource(R.string.clear),
-                        fontSize = 12.sp,
-                        color = AmberAccent,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.clickable { viewModel.clearAllFilters() }
-                    )
-                }
-            }
-
-            if (!isMediaPermissionGranted) {
-                Box(modifier = Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
-                    Card(
-                        colors = CardDefaults.cardColors(containerColor = SurfaceCard),
-                        shape = RoundedCornerShape(16.dp),
-                        modifier = Modifier.padding(16.dp).testTag("permission_request_card")
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(24.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(60.dp)
-                                    .clip(CircleShape)
-                                    .background(CyanAccent.copy(alpha = 0.15f)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Image,
-                                    contentDescription = null,
-                                    tint = CyanAccent,
-                                    modifier = Modifier.size(32.dp)
-                                )
-                            }
-                            Spacer(modifier = Modifier.height(16.dp))
-                            Text(
-                                text = stringResource(R.string.permission_title),
-                                style = MaterialTheme.typography.titleMedium,
-                                color = TextPrimaryDark,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(
-                                text = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                                    stringResource(R.string.permission_desc_tiramisu)
-                                } else {
-                                    stringResource(R.string.permission_desc_legacy)
-                                },
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = TextMutedDark,
-                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                            )
-                            Spacer(modifier = Modifier.height(20.dp))
-                            Row(
-                                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Button(
-                                    onClick = { permissionsState.launchMultiplePermissionRequest() },
-                                    colors = ButtonDefaults.buttonColors(containerColor = CyanAccent),
-                                    shape = RoundedCornerShape(12.dp),
-                                    modifier = Modifier.testTag("grant_permission_button")
-                                ) {
-                                    Text(
-                                        text = if (shouldShowRationale) stringResource(R.string.request_permission) else stringResource(R.string.grant_permission),
-                                        color = ObsidianBg,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
-
-                                OutlinedButton(
-                                    onClick = { openAppSettings(context) },
-                                    shape = RoundedCornerShape(12.dp),
-                                    colors = ButtonDefaults.outlinedButtonColors(contentColor = CyanAccent),
-                                    border = androidx.compose.foundation.BorderStroke(1.dp, CyanAccent.copy(alpha = 0.5f)),
-                                    modifier = Modifier.testTag("open_settings_button")
-                                ) {
-                                    Text(stringResource(R.string.app_settings), fontWeight = FontWeight.Bold)
-                                }
-                            }
-                        }
-                    }
-                }
-            } else {
-                if (isPartialPermissionGranted) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(AmberAccent.copy(alpha = 0.15f))
-                            .padding(horizontal = 16.dp, vertical = 6.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = stringResource(R.string.limited_access_notice),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = AmberAccent,
-                            fontWeight = FontWeight.Medium
-                        )
-                        Text(
-                            text = stringResource(R.string.manage_access),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = CyanAccent,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.clickable { permissionsState.launchMultiplePermissionRequest() }
-                        )
-                    }
-                }
-
-                if (indexingProgress.status == com.omex.gallery.domain.model.IndexingStatus.INDEXING_EXIF ||
-                    indexingProgress.status == com.omex.gallery.domain.model.IndexingStatus.SCANNING ||
-                    indexingProgress.status == com.omex.gallery.domain.model.IndexingStatus.GENERATING_THUMBNAILS) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(SurfaceCard)
-                            .padding(horizontal = 16.dp, vertical = 8.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            androidx.compose.material3.CircularProgressIndicator(
-                                modifier = Modifier.size(14.dp),
-                                color = CyanAccent,
-                                strokeWidth = 2.dp
-                            )
-                            Spacer(modifier = Modifier.width(10.dp))
-                            Text(
-                                text = indexingProgress.message.ifEmpty { stringResource(R.string.indexing_phase_1) },
-                                style = MaterialTheme.typography.labelMedium,
-                                color = TextPrimaryDark,
-                                maxLines = 1
-                            )
-                        }
-                        Text(
-                            text = stringResource(R.string.index_status),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = CyanAccent,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.clickable { onOpenIndexingStatus() }
-                        )
-                    }
-                }
-
-                when (selectedTab) {
-                MediaFilterTab.PEOPLE -> PeopleView(personGroups = personGroups, onMediaClick = onMediaClick)
-                MediaFilterTab.DUPLICATES -> DuplicatesView(duplicateGroups = duplicateGroups, onMediaClick = onMediaClick)
-                else -> {
-                    val isGridEmpty = if (searchFilterState.hasActiveFilters) mediaItems.isEmpty() else pagedItems.itemCount == 0
-                    if (isGridEmpty) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(32.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.Center
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(72.dp)
-                                        .clip(CircleShape)
-                                        .background(SurfaceCard),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Image,
-                                        contentDescription = null,
-                                        tint = CyanAccent,
-                                        modifier = Modifier.size(36.dp)
-                                    )
-                                }
-                                Spacer(modifier = Modifier.height(16.dp))
-                                Text(
-                                    text = if (searchFilterState.hasActiveFilters) stringResource(R.string.no_matches_filters) else "أصبحت مكتبتك فارغة",
-                                    style = MaterialTheme.typography.titleMedium.copy(
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 16.sp
-                                    ),
-                                    color = TextPrimaryDark,
-                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                                )
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Text(
-                                    text = if (searchFilterState.hasActiveFilters) "جرب تغيير كلمات البحث أو مسح الفلاتر" else "لم نجد أي صور أو فيديوهات في التخزين. اضغط للبحث عن وسائط جديدة.",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = TextMutedDark,
-                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                                )
-                                Spacer(modifier = Modifier.height(20.dp))
-                                if (searchFilterState.hasActiveFilters) {
-                                    Button(
-                                        onClick = { viewModel.clearAllFilters() },
-                                        colors = ButtonDefaults.buttonColors(containerColor = CyanAccent),
-                                        shape = RoundedCornerShape(12.dp)
-                                    ) {
-                                        Text(stringResource(R.string.clear_filters), color = ObsidianBg, fontWeight = FontWeight.Bold)
-                                    }
-                                } else {
-                                    Button(
-                                        onClick = { viewModel.triggerGalleryScan(context) },
-                                        colors = ButtonDefaults.buttonColors(containerColor = CyanAccent),
-                                        shape = RoundedCornerShape(12.dp)
-                                    ) {
-                                        Icon(imageVector = Icons.Default.Refresh, contentDescription = null, tint = ObsidianBg, modifier = Modifier.size(18.dp))
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text("إعادة فحص الوسائط", color = ObsidianBg, fontWeight = FontWeight.Bold)
-                                    }
-                                }
-                            }
-                        }
-                    } else {
                         LazyVerticalGrid(
                             columns = GridCells.Fixed(3),
-                            contentPadding = PaddingValues(1.dp),
-                            horizontalArrangement = Arrangement.spacedBy(3.dp),
-                            verticalArrangement = Arrangement.spacedBy(3.dp),
-                            modifier = Modifier.fillMaxSize().testTag("gallery_media_grid")
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp),
+                            modifier = Modifier.fillMaxSize().testTag("search_results_grid")
                         ) {
-                            if (searchFilterState.hasActiveFilters) {
-                                items(
-                                    items = mediaItems,
-                                    key = { it.id },
-                                    contentType = { "media_item" }
-                                ) { item ->
-                                    val onItemClick = remember(item.id, onMediaClick) { { onMediaClick(item.id) } }
-                                    val onFavClick = remember(item.id, viewModel) { { viewModel.toggleFavorite(item) } }
-                                    val onSelectClick = remember(item.id, viewModel) { { viewModel.toggleSelection(item.id) } }
-                                    MediaGridItemCell(
-                                        item = item,
-                                        onClick = onItemClick,
-                                        onFavoriteClick = onFavClick,
-                                        isSelected = selectedItemIds.contains(item.id),
-                                        onSelectClick = onSelectClick,
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .aspectRatio(1f)
-                                    )
-                                }
-                            } else {
-                                items(
-                                    count = pagedItems.itemCount,
-                                    key = pagedItems.itemKey { it.id },
-                                    contentType = pagedItems.itemContentType { "media_item" }
-                                ) { index ->
-                                    val item = pagedItems[index]
-                                    if (item != null) {
-                                        val onItemClick = remember(item.id, onMediaClick) { { onMediaClick(item.id) } }
-                                        val onFavClick = remember(item.id, viewModel) { { viewModel.toggleFavorite(item) } }
-                                        val onSelectClick = remember(item.id, viewModel) { { viewModel.toggleSelection(item.id) } }
-                                        MediaGridItemCell(
-                                            item = item,
-                                            onClick = onItemClick,
-                                            onFavoriteClick = onFavClick,
-                                            isSelected = selectedItemIds.contains(item.id),
-                                            onSelectClick = onSelectClick,
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .aspectRatio(1f)
-                                        )
-                                    } else {
-                                        Box(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .aspectRatio(1f)
-                                                .clip(RoundedCornerShape(2.dp))
-                                                .background(SurfaceCard)
-                                        )
+                            items(mediaItems, key = { it.id }) { item ->
+                                MediaGridTile(
+                                    item = item,
+                                    isSelected = false,
+                                    onClick = { onMediaClick(item.id) },
+                                    onLongClick = {}
+                                )
+                            }
+                        }
+                    }
+                }
+
+                NavTab.AI_STUDIO -> {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(16.dp)
+                    ) {
+                        Text(
+                            text = "استوديو الذكاء الاصطناعي (AI Studio)",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = CyanAccent,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "تحليل الصور، التصنيف التلقائي، اكتشاف الكائنات، التعرف على الوجوه، وتحسين الدقة محلياً بالكامل.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = TextMutedDark
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = SurfaceCard),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.fillMaxWidth().testTag("ai_studio_status_card")
+                        ) {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                Text("حالة مفهرس الذكاء الاصطناعي", color = TextPrimaryDark, fontWeight = FontWeight.Bold)
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Text(indexingProgress.message, color = AmberAccent, fontSize = 12.sp)
+                                Spacer(modifier = Modifier.height(12.dp))
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Button(
+                                        onClick = { viewModel.triggerAiScan(context) },
+                                        colors = ButtonDefaults.buttonColors(containerColor = CyanAccent),
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Text("بدء الفحص الذكي", color = ObsidianBg, fontWeight = FontWeight.Bold, fontSize = 12.sp)
                                     }
+                                    OutlinedButton(
+                                        onClick = { viewModel.triggerFullReindex(context) },
+                                        colors = ButtonDefaults.outlinedButtonColors(contentColor = TextPrimaryDark),
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Text("إعادة الفهرسة الكلية", fontSize = 12.sp)
+                                    }
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        Text("الميزات المستقلية المخططة (المراحل القادمة)", color = TextPrimaryDark, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Card(colors = CardDefaults.cardColors(containerColor = SurfaceDark), shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+                            Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = AmberAccent)
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Column {
+                                    Text("Ask Image & AI Chat (الدردشة التفاعلية مع الصور)", color = TextPrimaryDark, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                    Text("سؤال الذكاء الاصطناعي واستخراج النصوص والمعلومات من معرضك.", color = TextMutedDark, fontSize = 11.sp)
+                                }
+                            }
+                        }
+
+                        Card(colors = CardDefaults.cardColors(containerColor = SurfaceDark), shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+                            Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.Search, contentDescription = null, tint = CyanAccent)
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Column {
+                                    Text("البحث الدلالي (Semantic AI Search)", color = TextPrimaryDark, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                    Text("البحث باستخدام التضمينات والمفاهيم الطبيعية.", color = TextMutedDark, fontSize = 11.sp)
                                 }
                             }
                         }
@@ -1000,6 +764,172 @@ fun GalleryScreen(
         }
     }
 }
+
+@Composable
+fun MediaGridTile(
+    item: MediaItem,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .aspectRatio(1f)
+            .clip(RoundedCornerShape(8.dp))
+            .background(SurfaceCard)
+            .border(
+                width = if (isSelected) 3.dp else 0.dp,
+                color = if (isSelected) CyanAccent else Color.Transparent,
+                shape = RoundedCornerShape(8.dp)
+            )
+            .clickable { onClick() }
+    ) {
+        AsyncImage(
+            model = ImageRequest.Builder(LocalContext.current)
+                .data(item.uriString)
+                .crossfade(true)
+                .build(),
+            contentDescription = item.fileName,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.fillMaxSize()
+        )
+
+        if (item.isVideo) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(4.dp)
+                    .background(Color.Black.copy(alpha = 0.65f), RoundedCornerShape(4.dp))
+                    .padding(horizontal = 4.dp, vertical = 2.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.PlayArrow, contentDescription = null, tint = Color.White, modifier = Modifier.size(12.dp))
+                    Spacer(modifier = Modifier.width(2.dp))
+                    Text(formatDuration(item.durationMs), color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+
+        if (item.isFavorite) {
+            Icon(
+                imageVector = Icons.Default.Favorite,
+                contentDescription = null,
+                tint = AmberAccent,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(4.dp)
+                    .size(16.dp)
+            )
+        }
+
+        if (isSelected) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(CyanAccent.copy(alpha = 0.3f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(Icons.Default.CheckCircle, contentDescription = "Selected", tint = CyanAccent, modifier = Modifier.size(28.dp))
+            }
+        }
+    }
+}
+
+@Composable
+fun AlbumCardTile(
+    album: Album,
+    onClick: () -> Unit
+) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = SurfaceCard),
+        shape = RoundedCornerShape(12.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() }
+    ) {
+        Column {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(1.2f)
+                    .background(SurfaceDark),
+                contentAlignment = Alignment.Center
+            ) {
+                if (!album.coverUri.isNullOrEmpty()) {
+                    AsyncImage(
+                        model = album.coverUri,
+                        contentDescription = album.title,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                } else {
+                    Icon(
+                        imageVector = when (album.albumType) {
+                            AlbumType.CAMERA -> Icons.Default.CameraAlt
+                            AlbumType.SCREENSHOTS -> Icons.Default.Image
+                            AlbumType.DOWNLOADS -> Icons.Default.Folder
+                            AlbumType.VIDEOS -> Icons.Default.PlayArrow
+                            AlbumType.FAVORITES -> Icons.Default.Favorite
+                            AlbumType.FOLDER -> Icons.Default.Folder
+                        },
+                        contentDescription = null,
+                        tint = CyanAccent,
+                        modifier = Modifier.size(36.dp)
+                    )
+                }
+
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(6.dp)
+                        .background(ObsidianBg.copy(alpha = 0.75f), RoundedCornerShape(12.dp))
+                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                ) {
+                    Text("${album.itemCount}", color = CyanAccent, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+
+            Column(modifier = Modifier.padding(10.dp)) {
+                Text(
+                    text = album.title,
+                    color = TextPrimaryDark,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 13.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+    }
+}
+
+private fun groupMediaByDate(items: List<MediaItem>): Map<String, List<MediaItem>> {
+    val sdf = SimpleDateFormat("EEEE, d MMMM yyyy", Locale("ar"))
+    return items.groupBy { item ->
+        if (item.dateTaken > 0) {
+            sdf.format(Date(item.dateTaken))
+        } else {
+            "وسائط غير مؤرخة"
+        }
+    }
+}
+
+private fun formatDuration(durationMs: Long): String {
+    val seconds = (durationMs / 1000) % 60
+    val minutes = (durationMs / (1000 * 60)) % 60
+    val hours = durationMs / (1000 * 60 * 60)
+    return if (hours > 0) {
+        String.format("%d:%02d:%02d", hours, minutes, seconds)
+    } else {
+        String.format("%02d:%02d", minutes, seconds)
+    }
+}
+
+private fun openAppSettings(context: Context) {
+    val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+        data = Uri.fromParts("package", context.packageName, null)
+    }
+    context.startActivity(intent)
 }
 
 @Composable
@@ -1103,7 +1033,7 @@ fun DuplicatesView(duplicateGroups: List<DuplicateGroupWithMedia>, onMediaClick:
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(imageVector = Icons.Default.CopyAll, contentDescription = null, tint = AmberAccent, modifier = Modifier.size(20.dp))
+                            Icon(imageVector = Icons.Default.ContentCopy, contentDescription = null, tint = AmberAccent, modifier = Modifier.size(20.dp))
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(stringResource(R.string.group_label, group.groupId.take(12), group.groupType), color = AmberAccent, fontWeight = FontWeight.Bold, fontSize = 14.sp)
                         }
@@ -1271,29 +1201,5 @@ fun MediaGridItemCell(
                 modifier = Modifier.size(13.dp)
             )
         }
-    }
-}
-
-private fun formatDuration(ms: Long): String {
-    val totalSec = ms / 1000
-    val min = totalSec / 60
-    val sec = totalSec % 60
-    return String.format("%d:%02d", min, sec)
-}
-
-private fun openAppSettings(context: Context) {
-    try {
-        val intent = Intent(
-            Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-            Uri.fromParts("package", context.packageName, null)
-        ).apply {
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        }
-        context.startActivity(intent)
-    } catch (e: Exception) {
-        val intent = Intent(Settings.ACTION_SETTINGS).apply {
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        }
-        context.startActivity(intent)
     }
 }

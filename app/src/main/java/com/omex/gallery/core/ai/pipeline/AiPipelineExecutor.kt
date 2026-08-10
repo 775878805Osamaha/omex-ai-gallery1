@@ -10,11 +10,14 @@ import com.omex.gallery.core.data.local.DetectedObjectEntity
 import com.omex.gallery.core.data.local.FaceEmbeddingEntity
 import com.omex.gallery.core.data.local.ImageClassificationEntity
 import com.omex.gallery.core.data.local.ImageMetadataEntity
+import com.omex.gallery.core.data.local.OcrTextEntity
 import com.omex.gallery.domain.model.MediaItem
 import com.omex.gallery.core.ai.classifier.DefaultImageClassifier
 import com.omex.gallery.core.ai.detector.DefaultObjectDetector
 import com.omex.gallery.core.ai.faces.DefaultFaceDetector
 import com.omex.gallery.core.ai.faces.DefaultFaceEmbedder
+import com.omex.gallery.core.ai.ocr.MlKitOcrEngine
+import com.omex.gallery.core.ai.ocr.OcrEngine
 import com.omex.gallery.core.hash.DefaultPerceptualHasher
 import com.omex.gallery.core.hash.HashAlgorithm
 import kotlinx.coroutines.Dispatchers
@@ -30,7 +33,8 @@ class AiPipelineExecutor(
     private val detector: DefaultObjectDetector = DefaultObjectDetector(context),
     private val faceDetector: DefaultFaceDetector = DefaultFaceDetector(context),
     private val faceEmbedder: DefaultFaceEmbedder = DefaultFaceEmbedder(context),
-    private val hasher: DefaultPerceptualHasher = DefaultPerceptualHasher()
+    private val hasher: DefaultPerceptualHasher = DefaultPerceptualHasher(),
+    private val ocrEngine: OcrEngine = MlKitOcrEngine(context)
 ) {
 
     suspend fun processMediaItem(mediaItem: MediaItem): Result<Boolean> = withContext(Dispatchers.IO) {
@@ -45,8 +49,35 @@ class AiPipelineExecutor(
             detector.initialize()
             faceDetector.initialize()
             faceEmbedder.initialize()
+            ocrEngine.initialize()
 
             try {
+                // Task 0: On-Device OCR Text Extraction
+                val ocrResult = ocrEngine.processImage(bitmap)
+                if (ocrResult.isSuccess) {
+                    val result = ocrResult.getOrThrow()
+                    val entity = OcrTextEntity(
+                        mediaId = mediaItem.id,
+                        extractedText = result.extractedText,
+                        language = result.language,
+                        processingStatus = if (result.extractedText.isNotBlank()) "COMPLETED" else "EMPTY",
+                        modelVersion = "1.0.0",
+                        createdAt = System.currentTimeMillis(),
+                        updatedAt = System.currentTimeMillis()
+                    )
+                    aiDao.insertOcrText(entity)
+                } else {
+                    val entity = OcrTextEntity(
+                        mediaId = mediaItem.id,
+                        extractedText = "",
+                        processingStatus = "FAILED",
+                        modelVersion = "1.0.0",
+                        createdAt = System.currentTimeMillis(),
+                        updatedAt = System.currentTimeMillis()
+                    )
+                    aiDao.insertOcrText(entity)
+                }
+
                 // Task 1: Hashes & Metadata
                 val sha256 = calculateSha256(context, uri)
                 val aHash = hasher.computeHash(bitmap, HashAlgorithm.AVERAGE_HASH).hashValue

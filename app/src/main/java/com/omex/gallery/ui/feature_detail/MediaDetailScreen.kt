@@ -2,11 +2,15 @@ package com.omex.gallery.ui.feature_detail
 
 import android.content.Intent
 import android.net.Uri
+import android.widget.MediaController
+import android.widget.VideoView
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,6 +22,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -26,13 +32,16 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Face
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Memory
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -47,20 +56,26 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -68,9 +83,11 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.omex.gallery.R
+import com.omex.gallery.domain.model.MediaItem
 import com.omex.gallery.ui.feature_gallery.translateMlCategoryOrLabel
 import com.omex.gallery.ui.feature_gallery.translatePersonName
 import com.omex.gallery.ui.theme.AmberAccent
@@ -89,9 +106,12 @@ import java.util.Locale
 @Composable
 fun MediaDetailScreen(
     viewModel: MediaDetailViewModel,
-    onBackClick: () -> Unit
+    onBackClick: () -> Unit,
+    onAskAiClick: ((Long) -> Unit)? = null
 ) {
-    val mediaItem by viewModel.mediaItem.collectAsStateWithLifecycle()
+    val mediaItemList by viewModel.mediaItemList.collectAsStateWithLifecycle()
+    val currentIndex by viewModel.currentIndex.collectAsStateWithLifecycle()
+    val mediaItem by viewModel.currentMediaItem.collectAsStateWithLifecycle()
     val aiDetails by viewModel.mediaItemWithAi.collectAsStateWithLifecycle()
     val showExifSheet by viewModel.showExifSheet.collectAsStateWithLifecycle()
     val superResState by viewModel.superResolutionState.collectAsStateWithLifecycle()
@@ -99,6 +119,52 @@ fun MediaDetailScreen(
 
     val sheetState = rememberModalBottomSheetState()
     var showBoundingBoxes by remember { mutableStateOf(true) }
+    var showDeleteDialog by remember { mutableStateOf(false) }
+
+    val pagerState = rememberPagerState(
+        initialPage = currentIndex.coerceAtLeast(0),
+        pageCount = { mediaItemList.size.coerceAtLeast(1) }
+    )
+
+    // Sync Pager state with ViewModel index
+    LaunchedEffect(currentIndex) {
+        if (currentIndex in mediaItemList.indices && pagerState.currentPage != currentIndex) {
+            pagerState.scrollToPage(currentIndex)
+        }
+    }
+
+    LaunchedEffect(pagerState) {
+        snapshotFlow { pagerState.currentPage }.collect { page ->
+            if (page in mediaItemList.indices) {
+                viewModel.setCurrentIndex(page)
+            }
+        }
+    }
+
+    if (showDeleteDialog && mediaItem != null) {
+        AlertDialog(
+            onDismissRequest = { showDeleteDialog = false },
+            title = { Text("حذف الوسائط", color = TextPrimaryDark, fontWeight = FontWeight.Bold) },
+            text = { Text("هل أنت تأكد من رغبتك في حذف هذا الملف من المعرض والجهاز؟", color = TextMutedDark) },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showDeleteDialog = false
+                        viewModel.deleteCurrentMedia(onDeletedAll = onBackClick)
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color.Red)
+                ) {
+                    Text("حذف", color = Color.White, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteDialog = false }) {
+                    Text("إلغاء", color = TextPrimaryDark)
+                }
+            },
+            containerColor = SurfaceDark
+        )
+    }
 
     Scaffold(
         topBar = {
@@ -121,6 +187,18 @@ fun MediaDetailScreen(
                     }
                 },
                 actions = {
+                    mediaItem?.let { item ->
+                        IconButton(
+                            onClick = { onAskAiClick?.invoke(item.id) },
+                            modifier = Modifier.testTag("detail_ask_ai_button")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.AutoAwesome,
+                                contentDescription = stringResource(R.string.ask_image_title),
+                                tint = AmberAccent
+                            )
+                        }
+                    }
                     IconButton(
                         onClick = { viewModel.runAiAnalysis(context) },
                         modifier = Modifier.testTag("run_ai_analysis_button")
@@ -163,6 +241,16 @@ fun MediaDetailScreen(
                                 tint = TextPrimaryDark
                             )
                         }
+                        IconButton(
+                            onClick = { showDeleteDialog = true },
+                            modifier = Modifier.testTag("detail_delete_button")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Delete,
+                                contentDescription = "Delete",
+                                tint = Color.Red.copy(alpha = 0.85f)
+                            )
+                        }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = ObsidianBg)
@@ -177,107 +265,70 @@ fun MediaDetailScreen(
                 .background(ObsidianBg),
             contentAlignment = Alignment.Center
         ) {
-            mediaItem?.let { item ->
-                val activeDisplayPath = when (superResState) {
-                    is SuperResolutionState.Success -> (superResState as SuperResolutionState.Success).upscaledPath
-                    else -> item.uriString
+            if (mediaItemList.isNotEmpty()) {
+                HorizontalPager(
+                    state = pagerState,
+                    modifier = Modifier.fillMaxSize()
+                ) { page ->
+                    val item = mediaItemList.getOrNull(page)
+                    if (item != null) {
+                        MediaItemContentViewer(
+                            item = item,
+                            superResState = superResState,
+                            showBoundingBoxes = showBoundingBoxes,
+                            aiDetails = aiDetails
+                        )
+                    }
                 }
+            }
 
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    AsyncImage(
-                        model = activeDisplayPath,
-                        contentDescription = item.fileName,
-                        contentScale = ContentScale.Fit,
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .testTag("full_media_preview")
-                    )
-
-                    // Overlay bounding boxes for YOLO objects and Faces
-                    if (showBoundingBoxes && aiDetails != null) {
-                        Canvas(modifier = Modifier.fillMaxSize()) {
-                            val w = size.width
-                            val h = size.height
-
-                            // Draw YOLO detected objects in Cyan
-                            aiDetails?.objects?.forEach { obj ->
-                                val left = obj.left * w
-                                val top = obj.top * h
-                                val width = (obj.right - obj.left) * w
-                                val height = (obj.bottom - obj.top) * h
-
-                                drawRect(
-                                    color = Color(0xFF00E5FF),
-                                    topLeft = Offset(left, top),
-                                    size = Size(width, height),
-                                    style = Stroke(width = 4f)
-                                )
-                            }
-
-                            // Draw Faces in Amber
-                            aiDetails?.faces?.forEach { face ->
-                                val left = face.left * w
-                                val top = face.top * h
-                                val width = (face.right - face.left) * w
-                                val height = (face.bottom - face.top) * h
-
-                                drawRect(
-                                    color = AmberAccent,
-                                    topLeft = Offset(left, top),
-                                    size = Size(width, height),
-                                    style = Stroke(width = 4f)
+            // Super Resolution Overlay Banner
+            Column(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(16.dp)
+            ) {
+                when (val state = superResState) {
+                    is SuperResolutionState.Processing -> {
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = SurfaceDark),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                Text(stringResource(R.string.upscaling_progress), color = CyanAccent, fontWeight = FontWeight.Bold)
+                                Spacer(modifier = Modifier.height(8.dp))
+                                LinearProgressIndicator(
+                                    progress = { state.progress },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    color = CyanAccent,
+                                    trackColor = SurfaceCard
                                 )
                             }
                         }
                     }
-                }
-
-                // Super Resolution Overlay Banner
-                Column(
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .padding(16.dp)
-                ) {
-                    when (val state = superResState) {
-                        is SuperResolutionState.Processing -> {
-                            Card(
-                                colors = CardDefaults.cardColors(containerColor = SurfaceDark),
-                                shape = RoundedCornerShape(12.dp),
-                                modifier = Modifier.fillMaxWidth()
+                    is SuperResolutionState.Success -> {
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = SurfaceDark),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(12.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Column(modifier = Modifier.padding(16.dp)) {
-                                    Text(stringResource(R.string.upscaling_progress), color = CyanAccent, fontWeight = FontWeight.Bold)
-                                    Spacer(modifier = Modifier.height(8.dp))
-                                    LinearProgressIndicator(
-                                        progress = { state.progress },
-                                        modifier = Modifier.fillMaxWidth(),
-                                        color = CyanAccent,
-                                        trackColor = SurfaceCard
-                                    )
+                                Text(stringResource(R.string.upscaled_success), color = AmberAccent, fontWeight = FontWeight.Bold)
+                                IconButton(onClick = { viewModel.resetSuperResolutionState() }) {
+                                    Icon(imageVector = Icons.Default.Close, contentDescription = stringResource(R.string.clear), tint = TextPrimaryDark)
                                 }
                             }
                         }
-                        is SuperResolutionState.Success -> {
-                            Card(
-                                colors = CardDefaults.cardColors(containerColor = SurfaceDark),
-                                shape = RoundedCornerShape(12.dp),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(12.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(stringResource(R.string.upscaled_success), color = AmberAccent, fontWeight = FontWeight.Bold)
-                                    IconButton(onClick = { viewModel.resetSuperResolutionState() }) {
-                                        Icon(imageVector = Icons.Default.Close, contentDescription = stringResource(R.string.clear), tint = TextPrimaryDark)
-                                    }
-                                }
-                            }
-                        }
-                        else -> {
+                    }
+                    else -> {
+                        if (mediaItem?.isVideo == false) {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -349,6 +400,23 @@ fun MediaDetailScreen(
                         Spacer(modifier = Modifier.height(16.dp))
                     }
 
+                    // Extracted OCR Text
+                    if (aiDetails != null && !aiDetails!!.ocrText?.extractedText.isNullOrBlank()) {
+                        Text(stringResource(R.string.ocr_text_extracted), color = TextPrimaryDark, fontWeight = FontWeight.Bold)
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Card(colors = CardDefaults.cardColors(containerColor = SurfaceCard), shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth()) {
+                            Column(modifier = Modifier.padding(12.dp)) {
+                                Text(
+                                    text = aiDetails!!.ocrText!!.extractedText,
+                                    color = AmberAccent,
+                                    fontSize = 13.sp,
+                                    lineHeight = 18.sp
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(16.dp))
+                    }
+
                     // YOLO Detected Objects
                     if (aiDetails != null && aiDetails!!.objects.isNotEmpty()) {
                         Text(stringResource(R.string.yolo_objects_detected, aiDetails!!.objects.size), color = TextPrimaryDark, fontWeight = FontWeight.Bold)
@@ -411,6 +479,128 @@ fun MediaDetailScreen(
                     }
 
                     Spacer(modifier = Modifier.height(24.dp))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun MediaItemContentViewer(
+    item: MediaItem,
+    superResState: SuperResolutionState,
+    showBoundingBoxes: Boolean,
+    aiDetails: com.omex.gallery.domain.model.MediaItemWithAi?
+) {
+    if (item.isVideo) {
+        // Native Interactive Video View Player
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            AndroidView(
+                factory = { context ->
+                    VideoView(context).apply {
+                        val mediaController = MediaController(context)
+                        mediaController.setAnchorView(this)
+                        setMediaController(mediaController)
+                        setVideoURI(Uri.parse(item.uriString))
+                        requestFocus()
+                    }
+                },
+                modifier = Modifier
+                    .fillMaxSize()
+                    .testTag("video_player_view")
+            )
+        }
+    } else {
+        // Zoomable & Pannable Image Viewer
+        var scale by remember { mutableFloatStateOf(1f) }
+        var offsetX by remember { mutableFloatStateOf(0f) }
+        var offsetY by remember { mutableFloatStateOf(0f) }
+
+        val activeDisplayPath = when (superResState) {
+            is SuperResolutionState.Success -> (superResState as SuperResolutionState.Success).upscaledPath
+            else -> item.uriString
+        }
+
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .pointerInput(Unit) {
+                    detectTapGestures(
+                        onDoubleTap = {
+                            if (scale > 1f) {
+                                scale = 1f
+                                offsetX = 0f
+                                offsetY = 0f
+                            } else {
+                                scale = 2.5f
+                            }
+                        }
+                    )
+                }
+                .pointerInput(Unit) {
+                    detectTransformGestures { _, pan, zoom, _ ->
+                        scale = (scale * zoom).coerceIn(1f, 5f)
+                        if (scale > 1f) {
+                            offsetX += pan.x
+                            offsetY += pan.y
+                        } else {
+                            offsetX = 0f
+                            offsetY = 0f
+                        }
+                    }
+                },
+            contentAlignment = Alignment.Center
+        ) {
+            AsyncImage(
+                model = activeDisplayPath,
+                contentDescription = item.fileName,
+                contentScale = ContentScale.Fit,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer(
+                        scaleX = scale,
+                        scaleY = scale,
+                        translationX = offsetX,
+                        translationY = offsetY
+                    )
+                    .testTag("full_media_preview")
+            )
+
+            // Overlay bounding boxes for YOLO objects and Faces
+            if (showBoundingBoxes && aiDetails != null && scale == 1f) {
+                Canvas(modifier = Modifier.fillMaxSize()) {
+                    val w = size.width
+                    val h = size.height
+
+                    // Draw YOLO detected objects in Cyan
+                    aiDetails.objects.forEach { obj ->
+                        val left = obj.left * w
+                        val top = obj.top * h
+                        val width = (obj.right - obj.left) * w
+                        val height = (obj.bottom - obj.top) * h
+
+                        drawRect(
+                            color = Color(0xFF00E5FF),
+                            topLeft = Offset(left, top),
+                            size = Size(width, height),
+                            style = Stroke(width = 4f)
+                        )
+                    }
+
+                    // Draw Faces in Amber
+                    aiDetails.faces.forEach { face ->
+                        val left = face.left * w
+                        val top = face.top * h
+                        val width = (face.right - face.left) * w
+                        val height = (face.bottom - face.top) * h
+
+                        drawRect(
+                            color = AmberAccent,
+                            topLeft = Offset(left, top),
+                            size = Size(width, height),
+                            style = Stroke(width = 4f)
+                        )
+                    }
                 }
             }
         }

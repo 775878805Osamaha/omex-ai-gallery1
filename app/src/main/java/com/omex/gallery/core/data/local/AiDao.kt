@@ -4,6 +4,7 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Update
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -100,11 +101,34 @@ interface AiDao {
     @Query("DELETE FROM image_metadata WHERE mediaId = :mediaId")
     suspend fun deleteMetadata(mediaId: Long)
 
+    @Query("DELETE FROM ocr_text_results WHERE mediaId = :mediaId")
+    suspend fun deleteOcrForMedia(mediaId: Long)
+
+    // On-Device OCR DAO
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertOcrText(ocrText: OcrTextEntity): Long
+
+    @Update
+    suspend fun updateOcrText(ocrText: OcrTextEntity)
+
+    @Query("SELECT * FROM ocr_text_results WHERE mediaId = :mediaId LIMIT 1")
+    suspend fun getOcrForMedia(mediaId: Long): OcrTextEntity?
+
+    @Query("SELECT * FROM ocr_text_results WHERE extractedText LIKE '%' || :query || '%'")
+    suspend fun searchOcrText(query: String): List<OcrTextEntity>
+
+    @Query("SELECT mediaId FROM ocr_text_results WHERE extractedText LIKE '%' || :query || '%'")
+    fun searchMediaIdsByOcrText(query: String): Flow<List<Long>>
+
+    @Query("DELETE FROM ocr_text_results WHERE mediaId = :mediaId")
+    suspend fun clearOcrForMedia(mediaId: Long)
+
     suspend fun deleteAiDataForMedia(mediaId: Long) {
         deleteClassifications(mediaId)
         deleteObjects(mediaId)
         deleteFaces(mediaId)
         deleteEmbeddings(mediaId)
         deleteMetadata(mediaId)
+        deleteOcrForMedia(mediaId)
     }
 }

@@ -1,25 +1,25 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">معرض أومكس الذكي</string>
-    <string name="app_subtitle">EXIF والذكاء الاصطناعي</string>
-    <string name="search_placeholder">ابحث في الصور والفيديوهات...</string>
-    <string name="clear_all_filters">مسح جميع الفلاتر</string>
-    <string name="filter_media_collection">تصفية الوسائط</string>
-    <string name="camera_models_exif">طرازات الكاميرا (EXIF)</string>
-    <string name="tflite_ml_categories">تصنيفات الذكاء الاصطناعي</string>
-    <string name="gps_only">الصور التي تحتوي على إحداثيات GPS فقط</string>
-    <string name="tab_all">الكل</string>
-    <string name="tab_results">النتائج</string>
-    <string name="tab_photos">صور</string>
-    <string name="tab_videos">فيديوهات</string>
-    <string name="tab_favorites">المفضلة</string>
-    <string name="tab_people">الأشخاص</string>
-    <string name="tab_duplicates">الصور المكررة</string>
-    <string name="found_matching_items">تم العثور على %1$d عنصر مطابِق للفلاتر</string>
-    <string name="clear">مسح</string>
-    <string name="permission_title">يلزم إذن الوصول إلى الوسائط</string>
-    <string name="permission_desc_tiramisu">يتطلب معرض أومكس الذكي الوصول إلى الصور والفيديوهات لمسح مجموعة الوسائط وتنظيمها وتصنيفها دون اتصال بالإنترنت.</string>
-    <string name="permission_desc_legacy">يتطلب معرض أومكس الذكي الوصول إلى التخزين لمسح وتنظيم الصور والفيديوهات على جهازك.</string>
+    <string name="app_name">AI Gallery</string>
+    <string name="app_subtitle">EXIF and AI Gallery</string>
+    <string name="search_placeholder">Search photos and videos...</string>
+    <string name="clear_all_filters">Clear all filters</string>
+    <string name="filter_media_collection">Filter Media</string>
+    <string name="camera_models_exif">Camera Models (EXIF)</string>
+    <string name="tflite_ml_categories">AI Categories</string>
+    <string name="gps_only">Photos with GPS coordinates only</string>
+    <string name="tab_all">All</string>
+    <string name="tab_results">Results</string>
+    <string name="tab_photos">Photos</string>
+    <string name="tab_videos">Videos</string>
+    <string name="tab_favorites">Favorites</string>
+    <string name="tab_people">People</string>
+    <string name="tab_duplicates">Duplicates</string>
+    <string name="found_matching_items">Found %1$d items matching filters</string>
+    <string name="clear">Clear</string>
+    <string name="permission_title">Media Access Permission Required</string>
+    <string name="permission_desc_tiramisu">AI Gallery requires access to photos and videos to scan, organize, and categorize your media collection offline.</string>
+    <string name="permission_desc_legacy">AI Gallery requires storage access to scan and organize photos and videos on your device.</string>
     <string name="request_permission">طلب الإذن</string>
     <string name="grant_permission">منح الإذن</string>
     <string name="app_settings">إعدادات التطبيق</string>
@@ -95,4 +95,40 @@
     <string name="cat_nature">طبيعة</string>
     <string name="cat_fish">سمك</string>
     <string name="cat_object">عنصر</string>
+
+    <!-- OCR Search Strings -->
+    <string name="search_title">البحث المحلي بالنصوص (OCR)</string>
+    <string name="search_placeholder_text_ocr">ابحث عن نصوص في الصور (مثل: فاتورة, invoice, 12345)...</string>
+    <string name="recent_searches_header">عمليات البحث الأخيرة</string>
+    <string name="clear_all">مسح الكل</string>
+    <string name="search_results_count">نتائج البحث (%1$d)</string>
+    <string name="no_ocr_results_found">لم يتم العثور على صور تحتوي على النص "%1$s"</string>
+    <string name="ocr_text_extracted">النص المستخرج (OCR)</string>
+
+    <!-- Local AI Chat Strings -->
+    <string name="ai_chat_title">المحادثة الذكية المحلية (Local AI Chat)</string>
+    <string name="ai_chat_input_placeholder">اكتب رسالتك للمساعد المحلي...</string>
+    <string name="ai_model_not_installed">نموذج الذكاء الاصطناعي غير مثبت</string>
+    <string name="ai_model_installed_ready">نموذج Gemma 2B المحلي جاهز للاستخدام بدون إنترنت</string>
+    <string name="ai_model_info_msg">مكان وضع ملف النموذج: %1$s</string>
+    <string name="stop_generation">إيقاف التوليد</string>
+    <string name="new_chat">محادثة جديدة</string>
+    <string name="clear_chat_history">مسح المحادثة</string>
+    <string name="ai_chat_disclaimer">تتم كافة المعالجات والمحادثات محلياً 100% داخل جهازك دون إرسال أي بيانات للسحابة.</string>
+    <string name="import_model_button">استيراد ملف النموذج (.task)</string>
+    <string name="real_local_model_badge">REAL LOCAL MODEL (Gemma 2B)</string>
+    <string name="demo_fallback_badge">FALLBACK / DEMO RESPONSE</string>
+
+    <!-- Ask Image Multimodal Strings -->
+    <string name="ask_image_title">اسأل الذكاء الاصطناعي حول الصورة</string>
+    <string name="ask_image_subtitle">تحليل الصورة والاستفسار بالذكاء الاصطناعي المحلي</string>
+    <string name="ask_image_input_placeholder">اكتب سؤالك حول هذه الصورة...</string>
+    <string name="litert_model_installed_ready">نموذج Gemma 3n LiteRT-LM جاهز للاستخدام</string>
+    <string name="litert_model_not_installed">لم يتم تثبيت نموذج Gemma 3n (.litertlm) للرؤية</string>
+    <string name="import_litert_model_button">استيراد نموذج (.litertlm)</string>
+    <string name="real_multimodal_badge">LOCAL VISION AI (Gemma 3n)</string>
+    <string name="fallback_vision_badge">BASIC LOCAL IMAGE ANALYSIS</string>
+    <string name="suggestion_describe_image">صف هذه الصورة بدقة</string>
+    <string name="suggestion_extract_text">استخرج النصوص الظاهرة في الصورة</string>
+    <string name="suggestion_main_objects">ما هي العناصر الرئيسية في الصورة؟</string>
 </resources>

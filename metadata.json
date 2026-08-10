@@ -1,6 +1,6 @@
 {
-  "name": "معرض أومكس الذكي",
-  "description": "Smart offline AI gallery app featuring local media scanning, EXIF indexing, thumbnail engine, and instant smart view.",
+  "name": "AI Gallery",
+  "description": "On-device AI gallery app featuring photo/video management, instant smart views, semantic search, local AI vision models, and offline privacy.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
