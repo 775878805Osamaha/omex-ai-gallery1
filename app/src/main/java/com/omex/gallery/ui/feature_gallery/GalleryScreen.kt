@@ -96,6 +96,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -224,6 +225,14 @@ fun GalleryScreen(
                 perm.permission == Manifest.permission.READ_EXTERNAL_STORAGE &&
                         perm.status is PermissionStatus.Granted
             }
+        }
+    }
+
+    LaunchedEffect(isMediaPermissionGranted) {
+        if (isMediaPermissionGranted) {
+            viewModel.triggerGalleryScan(context)
+        } else {
+            permissionsState.launchMultiplePermissionRequest()
         }
     }
 
@@ -367,7 +376,13 @@ fun GalleryScreen(
                     }
 
                     IconButton(
-                        onClick = { viewModel.triggerGalleryScan(context) },
+                        onClick = {
+                            if (isMediaPermissionGranted) {
+                                viewModel.triggerGalleryScan(context)
+                            } else {
+                                permissionsState.launchMultiplePermissionRequest()
+                            }
+                        },
                         modifier = Modifier.testTag("refresh_scan_button")
                     ) {
                         Icon(
@@ -550,12 +565,18 @@ fun GalleryScreen(
                         }
                     }
 
-                    if (mediaItems.isEmpty()) {
+                    if (!isMediaPermissionGranted) {
+                        MediaPermissionStateCard(
+                            permissionsState = permissionsState,
+                            context = context,
+                            onRequestPermission = { permissionsState.launchMultiplePermissionRequest() }
+                        )
+                    } else if (mediaItems.isEmpty()) {
                         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Icon(Icons.Default.Image, contentDescription = null, tint = TextMutedDark, modifier = Modifier.size(64.dp))
                                 Spacer(modifier = Modifier.height(12.dp))
-                                Text("لا توجد وسائط متاح حالياً", color = TextMutedDark, fontWeight = FontWeight.Medium)
+                                Text("لا توجد وسائط متاحة حالياً", color = TextMutedDark, fontWeight = FontWeight.Medium)
                             }
                         }
                     } else {
@@ -599,31 +620,39 @@ fun GalleryScreen(
                 }
 
                 NavTab.ALBUMS -> {
-                    Column(modifier = Modifier.fillMaxSize().padding(12.dp)) {
-                        Text(
-                            text = "الألبومات والمجلدات الذكية",
-                            style = MaterialTheme.typography.titleMedium,
-                            color = TextPrimaryDark,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(bottom = 12.dp)
+                    if (!isMediaPermissionGranted) {
+                        MediaPermissionStateCard(
+                            permissionsState = permissionsState,
+                            context = context,
+                            onRequestPermission = { permissionsState.launchMultiplePermissionRequest() }
                         )
+                    } else {
+                        Column(modifier = Modifier.fillMaxSize().padding(12.dp)) {
+                            Text(
+                                text = "الألبومات والمجلدات الذكية",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = TextPrimaryDark,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(bottom = 12.dp)
+                            )
 
-                        if (albums.isEmpty()) {
-                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                Text("لا توجد ألبومات متاح حالياً", color = TextMutedDark)
-                            }
-                        } else {
-                            LazyVerticalGrid(
-                                columns = GridCells.Fixed(2),
-                                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                                verticalArrangement = Arrangement.spacedBy(10.dp),
-                                modifier = Modifier.fillMaxSize().testTag("albums_grid")
-                            ) {
-                                items(albums, key = { it.id }) { album ->
-                                    AlbumCardTile(
-                                        album = album,
-                                        onClick = { viewModel.selectAlbum(album) }
-                                    )
+                            if (albums.isEmpty()) {
+                                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                    Text("لا توجد ألبومات متاحة حالياً", color = TextMutedDark)
+                                }
+                            } else {
+                                LazyVerticalGrid(
+                                    columns = GridCells.Fixed(2),
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                                    modifier = Modifier.fillMaxSize().testTag("albums_grid")
+                                ) {
+                                    items(albums, key = { it.id }) { album ->
+                                        AlbumCardTile(
+                                            album = album,
+                                            onClick = { viewModel.selectAlbum(album) }
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -631,53 +660,61 @@ fun GalleryScreen(
                 }
 
                 NavTab.SEARCH -> {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(12.dp)
-                    ) {
-                        OutlinedTextField(
-                            value = searchFilterState.query,
-                            onValueChange = { viewModel.updateSearchQuery(it) },
-                            placeholder = { Text("ابحث في الصور والفيديوهات بالاسم أو المعلمات...", color = TextMutedDark, fontSize = 13.sp) },
-                            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = CyanAccent) },
-                            trailingIcon = {
-                                if (searchFilterState.query.isNotEmpty()) {
-                                    IconButton(onClick = { viewModel.updateSearchQuery("") }) {
-                                        Icon(Icons.Default.Clear, contentDescription = "Clear", tint = TextMutedDark)
-                                    }
-                                }
-                            },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .testTag("search_tab_input"),
-                            singleLine = true,
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedContainerColor = SurfaceCard,
-                                unfocusedContainerColor = SurfaceCard,
-                                focusedBorderColor = CyanAccent,
-                                unfocusedBorderColor = Color.Transparent,
-                                focusedTextColor = TextPrimaryDark,
-                                unfocusedTextColor = TextPrimaryDark
-                            ),
-                            shape = RoundedCornerShape(12.dp)
+                    if (!isMediaPermissionGranted) {
+                        MediaPermissionStateCard(
+                            permissionsState = permissionsState,
+                            context = context,
+                            onRequestPermission = { permissionsState.launchMultiplePermissionRequest() }
                         )
-
-                        Spacer(modifier = Modifier.height(12.dp))
-
-                        LazyVerticalGrid(
-                            columns = GridCells.Fixed(3),
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                            verticalArrangement = Arrangement.spacedBy(6.dp),
-                            modifier = Modifier.fillMaxSize().testTag("search_results_grid")
+                    } else {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(12.dp)
                         ) {
-                            items(mediaItems, key = { it.id }) { item ->
-                                MediaGridTile(
-                                    item = item,
-                                    isSelected = false,
-                                    onClick = { onMediaClick(item.id) },
-                                    onLongClick = {}
-                                )
+                            OutlinedTextField(
+                                value = searchFilterState.query,
+                                onValueChange = { viewModel.updateSearchQuery(it) },
+                                placeholder = { Text("ابحث في الصور والفيديوهات بالاسم أو المعلمات...", color = TextMutedDark, fontSize = 13.sp) },
+                                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = CyanAccent) },
+                                trailingIcon = {
+                                    if (searchFilterState.query.isNotEmpty()) {
+                                        IconButton(onClick = { viewModel.updateSearchQuery("") }) {
+                                            Icon(Icons.Default.Clear, contentDescription = "Clear", tint = TextMutedDark)
+                                        }
+                                    }
+                                },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .testTag("search_tab_input"),
+                                singleLine = true,
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedContainerColor = SurfaceCard,
+                                    unfocusedContainerColor = SurfaceCard,
+                                    focusedBorderColor = CyanAccent,
+                                    unfocusedBorderColor = Color.Transparent,
+                                    focusedTextColor = TextPrimaryDark,
+                                    unfocusedTextColor = TextPrimaryDark
+                                ),
+                                shape = RoundedCornerShape(12.dp)
+                            )
+
+                            Spacer(modifier = Modifier.height(12.dp))
+
+                            LazyVerticalGrid(
+                                columns = GridCells.Fixed(3),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                verticalArrangement = Arrangement.spacedBy(6.dp),
+                                modifier = Modifier.fillMaxSize().testTag("search_results_grid")
+                            ) {
+                                items(mediaItems, key = { it.id }) { item ->
+                                    MediaGridTile(
+                                        item = item,
+                                        isSelected = false,
+                                        onClick = { onMediaClick(item.id) },
+                                        onLongClick = {}
+                                    )
+                                }
                             }
                         }
                     }
@@ -1200,6 +1237,99 @@ fun MediaGridItemCell(
                 tint = if (item.isFavorite) AmberAccent else Color.White,
                 modifier = Modifier.size(13.dp)
             )
+        }
+    }
+}
+
+@OptIn(ExperimentalPermissionsApi::class)
+@Composable
+fun MediaPermissionStateCard(
+    permissionsState: com.google.accompanist.permissions.MultiplePermissionsState,
+    context: Context,
+    onRequestPermission: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(24.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Card(
+            colors = CardDefaults.cardColors(containerColor = SurfaceCard),
+            shape = RoundedCornerShape(16.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag("media_permission_card")
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(64.dp)
+                        .clip(CircleShape)
+                        .background(CyanAccent.copy(alpha = 0.15f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.PhotoLibrary,
+                        contentDescription = null,
+                        tint = CyanAccent,
+                        modifier = Modifier.size(36.dp)
+                    )
+                }
+
+                Text(
+                    text = "إذن الوصول للصور والفيديوهات مطلوب",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = TextPrimaryDark
+                )
+
+                Text(
+                    text = "يحتاج التطبيق إلى إذن الوصول إلى الصور والفيديوهات على جهازك لبدء فحص المعرض وفهرسته محلياً بالكامل.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = TextMutedDark,
+                    modifier = Modifier.padding(horizontal = 8.dp)
+                )
+
+                Button(
+                    onClick = onRequestPermission,
+                    colors = ButtonDefaults.buttonColors(containerColor = CyanAccent, contentColor = ObsidianBg),
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("grant_permission_button")
+                ) {
+                    Text("منح إذن الوسائط", fontWeight = FontWeight.Bold)
+                }
+
+                val allPermanentlyDenied = permissionsState.permissions.all { perm ->
+                    perm.status is PermissionStatus.Denied && !(perm.status as PermissionStatus.Denied).shouldShowRationale
+                }
+
+                if (allPermanentlyDenied || !permissionsState.shouldShowRationale) {
+                    OutlinedButton(
+                        onClick = {
+                            val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                data = Uri.fromParts("package", context.packageName, null)
+                            }
+                            context.startActivity(intent)
+                        },
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = CyanAccent),
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("open_settings_button")
+                    ) {
+                        Text("فتح إعدادات التطبيق", fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
         }
     }
 }
