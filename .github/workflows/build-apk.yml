@@ -22,11 +22,34 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
+      - name: Setup Signing Keystore
+        run: |
+          if [ -n "$KEYSTORE_PATH" ] && [ -f "$KEYSTORE_PATH" ]; then
+            echo "Using provided release keystore at $KEYSTORE_PATH"
+          elif [ ! -f debug.keystore ]; then
+            echo "Release keystore secrets not provided. Generating temporary debug keystore..."
+            keytool -genkeypair -v \
+              -keystore debug.keystore \
+              -alias androiddebugkey \
+              -keyalg RSA \
+              -keysize 2048 \
+              -validity 10000 \
+              -storepass android \
+              -keypass android \
+              -dname "CN=Android Debug,O=Android,C=US"
+          fi
+        env:
+          KEYSTORE_PATH: ${{ secrets.KEYSTORE_PATH }}
+
       - name: Run Unit Tests
         run: ./gradlew testDebugUnitTest
 
       - name: Build Release APK
         run: ./gradlew assembleRelease
+        env:
+          KEYSTORE_PATH: ${{ secrets.KEYSTORE_PATH }}
+          STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
 
       - name: Verify APK Output
         run: |

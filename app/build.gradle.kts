@@ -22,21 +22,51 @@ android {
 
   signingConfigs {
     create("release") {
-      val customKeystore = file(System.getenv("KEYSTORE_PATH") ?: "${rootDir}/my-upload-key-custom.jks")
-      if (customKeystore.exists()) {
-        storeFile = customKeystore
+      val keystorePathEnv = System.getenv("KEYSTORE_PATH")
+      val keystoreFile = if (!keystorePathEnv.isNullOrBlank()) file(keystorePathEnv) else null
+
+      if (keystoreFile != null && keystoreFile.exists()) {
+        storeFile = keystoreFile
         storePassword = System.getenv("STORE_PASSWORD")
         keyAlias = "upload"
         keyPassword = System.getenv("KEY_PASSWORD")
       } else {
-        storeFile = file("${rootDir}/debug.keystore")
+        val debugKeystore = file("${rootDir}/debug.keystore")
+        if (!debugKeystore.exists()) {
+          ProcessBuilder(
+            "keytool", "-genkeypair",
+            "-keystore", debugKeystore.absolutePath,
+            "-alias", "androiddebugkey",
+            "-keyalg", "RSA",
+            "-keysize", "2048",
+            "-validity", "10000",
+            "-storepass", "android",
+            "-keypass", "android",
+            "-dname", "CN=Android Debug,O=Android,C=US"
+          ).inheritIO().start().waitFor()
+        }
+        storeFile = debugKeystore
         storePassword = "android"
         keyAlias = "androiddebugkey"
         keyPassword = "android"
       }
     }
     create("debugConfig") {
-      storeFile = file("${rootDir}/debug.keystore")
+      val debugKeystore = file("${rootDir}/debug.keystore")
+      if (!debugKeystore.exists()) {
+        ProcessBuilder(
+          "keytool", "-genkeypair",
+          "-keystore", debugKeystore.absolutePath,
+          "-alias", "androiddebugkey",
+          "-keyalg", "RSA",
+          "-keysize", "2048",
+          "-validity", "10000",
+          "-storepass", "android",
+          "-keypass", "android",
+          "-dname", "CN=Android Debug,O=Android,C=US"
+        ).inheritIO().start().waitFor()
+      }
+      storeFile = debugKeystore
       storePassword = "android"
       keyAlias = "androiddebugkey"
       keyPassword = "android"
