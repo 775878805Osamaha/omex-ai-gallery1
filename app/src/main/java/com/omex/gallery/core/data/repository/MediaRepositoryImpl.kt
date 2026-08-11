@@ -55,11 +55,37 @@ import java.io.FileOutputStream
 class MediaRepositoryImpl(
     private val mediaDao: MediaDao,
     private val aiDao: AiDao,
+    private val categoryDao: com.omex.gallery.core.data.local.CategoryDao,
     private val context: Context
 ) : MediaRepository {
 
+    companion object {
+        @Volatile
+        var lastIndexingError: String = "None"
+    }
+
     private val _indexingProgress = MutableStateFlow(IndexingProgress())
     override fun getIndexingProgress(): Flow<IndexingProgress> = _indexingProgress.asStateFlow()
+
+    override suspend fun getRoomMediaCount(): Int = withContext(Dispatchers.IO) {
+        mediaDao.getMediaCount()
+    }
+
+    override suspend fun getRoomPhotosCount(): Int = withContext(Dispatchers.IO) {
+        mediaDao.getPhotosCount()
+    }
+
+    override suspend fun getRoomVideosCount(): Int = withContext(Dispatchers.IO) {
+        mediaDao.getVideosCount()
+    }
+
+    override suspend fun getLastIndexingError(): String = withContext(Dispatchers.IO) {
+        if (_indexingProgress.value.status == IndexingStatus.ERROR && _indexingProgress.value.message.isNotEmpty()) {
+            _indexingProgress.value.message
+        } else {
+            lastIndexingError
+        }
+    }
 
     private val pagingConfig = PagingConfig(
         pageSize = 60,
@@ -148,7 +174,15 @@ class MediaRepositoryImpl(
     }
 
     override suspend fun insertMediaItems(items: List<MediaItem>) = withContext(Dispatchers.IO) {
+        val countBefore = mediaDao.getAllMediaList().size
+        android.util.Log.i("MediaRepository", "items before insert = $countBefore")
+        com.omex.gallery.core.log.OmexLogger.i(com.omex.gallery.core.log.LogCategory.DATABASE, "MediaRepository", "items before insert = $countBefore")
+
         mediaDao.insertAll(items.map { it.toEntity() })
+
+        val insertedCount = items.size
+        android.util.Log.i("MediaRepository", "items inserted = $insertedCount")
+        com.omex.gallery.core.log.OmexLogger.i(com.omex.gallery.core.log.LogCategory.DATABASE, "MediaRepository", "items inserted = $insertedCount")
     }
 
     override suspend fun deleteMediaItem(id: Long) = withContext(Dispatchers.IO) {
@@ -181,22 +215,41 @@ class MediaRepositoryImpl(
     }
 
     override suspend fun scanAndIndexGallery(isFullReindex: Boolean): Result<Int> = withContext(Dispatchers.IO) {
-        val scanner = MediaScanner(context)
-        val metadataExtractor = MetadataExtractor(context)
-        val hashGenerator = HashGenerator(context)
-        val thumbnailGenerator = ThumbnailGenerator(context)
-        val progressTracker = ProgressTracker()
+        try {
+            val scanner = MediaScanner(context)
+            val metadataExtractor = MetadataExtractor(context)
+            val hashGenerator = HashGenerator(context)
+            val thumbnailGenerator = ThumbnailGenerator(context)
+            val progressTracker = ProgressTracker()
 
-        val indexer = MediaIndexer(
-            scanner = scanner,
-            metadataExtractor = metadataExtractor,
-            hashGenerator = hashGenerator,
-            thumbnailGenerator = thumbnailGenerator,
-            repository = this@MediaRepositoryImpl,
-            progressTracker = progressTracker
-        )
+            val indexer = MediaIndexer(
+                scanner = scanner,
+                metadataExtractor = metadataExtractor,
+                hashGenerator = hashGenerator,
+                thumbnailGenerator = thumbnailGenerator,
+                repository = this@MediaRepositoryImpl,
+                progressTracker = progressTracker
+            )
 
-        indexer.executeIndexingPass()
+            val res = indexer.executeIndexingPass()
+            if (res.isFailure) {
+                val err = res.exceptionOrNull()?.localizedMessage ?: "Indexing pass failed"
+                lastIndexingError = err
+                _indexingProgress.value = IndexingProgress(
+                    status = IndexingStatus.ERROR,
+                    message = err
+                )
+            }
+            res
+        } catch (e: Exception) {
+            val err = e.localizedMessage ?: e.message ?: "Indexing pass exception"
+            lastIndexingError = err
+            _indexingProgress.value = IndexingProgress(
+                status = IndexingStatus.ERROR,
+                message = err
+            )
+            Result.failure(e)
+        }
     }
 
     override suspend fun regenerateThumbnails(): Result<Int> = withContext(Dispatchers.IO) {
@@ -338,14 +391,14 @@ class MediaRepositoryImpl(
     }
 
     override suspend fun runAiPipelineOnMedia(context: Context, mediaItem: MediaItem): Result<Boolean> = withContext(Dispatchers.IO) {
-        val executor = AiPipelineExecutor(context, aiDao)
+        val executor = AiPipelineExecutor(context, aiDao, categoryDao)
         executor.processMediaItem(mediaItem)
     }
 
     override suspend fun runFullGalleryAiScan(context: Context): Result<Boolean> = withContext(Dispatchers.IO) {
         try {
             val allMedia = getAllMediaItems()
-            val executor = AiPipelineExecutor(context, aiDao)
+            val executor = AiPipelineExecutor(context, aiDao, categoryDao)
             val total = allMedia.size
 
             allMedia.forEachIndexed { index, item ->
@@ -449,6 +502,98 @@ class MediaRepositoryImpl(
             if (enhancedBitmap != null && !enhancedBitmap.isRecycled) {
                 enhancedBitmap.recycle()
             }
+        }
+    }
+
+    // Virtual Categories Implementation
+    override fun getAllCategories(): Flow<List<com.omex.gallery.core.data.local.MediaCategoryEntity>> {
+        return flow {
+            ensureDefaultCategories()
+            categoryDao.getAllCategories().collect { emit(it) }
+        }
+    }
+
+    private suspend fun ensureDefaultCategories() {
+        val defaultCategories = listOf(
+            com.omex.gallery.core.data.local.MediaCategoryEntity("PERSON", "الأشخاص", "person"),
+            com.omex.gallery.core.data.local.MediaCategoryEntity("PRODUCT", "المنتجات", "shopping_bag"),
+            com.omex.gallery.core.data.local.MediaCategoryEntity("TRADING", "التداول", "show_chart"),
+            com.omex.gallery.core.data.local.MediaCategoryEntity("SCREENSHOT", "لقطات الشاشة", "crop_free"),
+            com.omex.gallery.core.data.local.MediaCategoryEntity("DOCUMENT", "المستندات", "description"),
+            com.omex.gallery.core.data.local.MediaCategoryEntity("CAR", "السيارات", "directions_car"),
+            com.omex.gallery.core.data.local.MediaCategoryEntity("FOOD", "الطعام", "restaurant"),
+            com.omex.gallery.core.data.local.MediaCategoryEntity("NATURE", "الطبيعة", "park"),
+            com.omex.gallery.core.data.local.MediaCategoryEntity("TRAVEL", "السفر", "flight"),
+            com.omex.gallery.core.data.local.MediaCategoryEntity("WORK", "صور العمل", "work"),
+            com.omex.gallery.core.data.local.MediaCategoryEntity("OTHER", "أخرى", "category")
+        )
+        categoryDao.insertCategories(defaultCategories)
+    }
+
+    override suspend fun getCategoriesForMedia(mediaId: Long): List<String> = withContext(Dispatchers.IO) {
+        categoryDao.getCategoriesForMedia(mediaId)
+    }
+
+    override fun getCategoriesForMediaFlow(mediaId: Long): Flow<List<String>> {
+        return categoryDao.getCategoriesForMediaFlow(mediaId)
+    }
+
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    override fun getMediaForCategories(categoryIds: List<String>): Flow<List<MediaItem>> = flow {
+        if (categoryIds.isEmpty()) {
+            mediaDao.getAllMedia().map { list -> list.map { it.toDomain() } }.collect { emit(it) }
+        } else {
+            val matchingIds = categoryDao.getMediaIdsMatchingAllCategories(categoryIds, categoryIds.size)
+            val items = mediaDao.getAllMediaList()
+                .filter { matchingIds.contains(it.id) }
+                .map { it.toDomain() }
+            emit(items)
+        }
+    }
+
+    override fun getCategoryMediaCount(categoryId: String): Flow<Int> {
+        return categoryDao.getCategoryMediaCountFlow(categoryId)
+    }
+
+    override suspend fun getLatestMediaForCategory(categoryId: String): MediaItem? = withContext(Dispatchers.IO) {
+        categoryDao.getLatestMediaForCategory(categoryId)?.toDomain()
+    }
+
+    override suspend fun classifyUnclassifiedMedia(context: Context): Result<Int> = withContext(Dispatchers.IO) {
+        try {
+            val allMedia = mediaDao.getAllMediaList()
+            var classifiedCount = 0
+
+            allMedia.forEach { itemEntity ->
+                val existingCategories = categoryDao.getCategoriesForMedia(itemEntity.id)
+                if (existingCategories.isEmpty()) {
+                    val classifications = aiDao.getClassificationsForMedia(itemEntity.id)
+                    val objects = aiDao.getObjectsForMedia(itemEntity.id)
+                    val faces = aiDao.getFacesForMedia(itemEntity.id)
+                    val ocr = aiDao.getOcrForMedia(itemEntity.id)
+
+                    val categories = com.omex.gallery.core.ai.classifier.CategoryClassifier.classifyMediaItem(
+                        mediaItem = itemEntity,
+                        classifications = classifications,
+                        objects = objects,
+                        faces = faces,
+                        ocrText = ocr
+                    )
+
+                    val crossRefs = categories.map { catId ->
+                        com.omex.gallery.core.data.local.MediaItemCategoryCrossRef(
+                            mediaId = itemEntity.id,
+                            categoryId = catId
+                        )
+                    }
+                    categoryDao.insertCrossRefs(crossRefs)
+                    classifiedCount++
+                }
+            }
+
+            Result.success(classifiedCount)
+        } catch (e: Exception) {
+            Result.failure(e)
         }
     }
 }

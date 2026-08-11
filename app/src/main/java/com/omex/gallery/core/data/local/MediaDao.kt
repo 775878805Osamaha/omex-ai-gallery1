@@ -96,6 +96,15 @@ interface MediaDao {
     @Query("SELECT COUNT(*) FROM media_items")
     fun getMediaCountFlow(): Flow<Int>
 
+    @Query("SELECT COUNT(*) FROM media_items")
+    suspend fun getMediaCount(): Int
+
+    @Query("SELECT COUNT(*) FROM media_items WHERE isVideo = 0")
+    suspend fun getPhotosCount(): Int
+
+    @Query("SELECT COUNT(*) FROM media_items WHERE isVideo = 1")
+    suspend fun getVideosCount(): Int
+
     @Query("SELECT COUNT(*) FROM media_items WHERE isIndexed = 1")
     fun getIndexedCountFlow(): Flow<Int>
 

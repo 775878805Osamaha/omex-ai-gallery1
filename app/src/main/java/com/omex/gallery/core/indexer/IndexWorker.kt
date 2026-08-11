@@ -44,7 +44,9 @@ class IndexWorker(
         )
 
         createNotificationChannel()
-        setForeground(createForegroundInfo(0, 0, "Initializing indexer..."))
+        try {
+            setForeground(createForegroundInfo(0, 0, "Initializing indexer..."))
+        } catch (_: Exception) {}
 
         // Launch collector job to keep foreground notification updated
         val progressJob = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main).launch {

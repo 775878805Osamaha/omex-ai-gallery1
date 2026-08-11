@@ -55,15 +55,23 @@ import com.omex.gallery.ui.theme.SurfaceDark
 import com.omex.gallery.ui.theme.TextMutedDark
 import com.omex.gallery.ui.theme.TextPrimaryDark
 
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import com.omex.gallery.ui.theme.AmberAccent
+
+import androidx.compose.material.icons.filled.BugReport
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun IndexingStatusScreen(
     galleryViewModel: GalleryViewModel,
-    onBackClick: () -> Unit
+    onBackClick: () -> Unit,
+    onOpenDiagnostic: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val indexingProgress by galleryViewModel.indexingProgress.collectAsStateWithLifecycle()
     val mediaItems by galleryViewModel.mediaItems.collectAsStateWithLifecycle()
+    val diagnosticState by galleryViewModel.diagnosticState.collectAsStateWithLifecycle()
 
     val thumbnailGenerator = remember { ThumbnailGenerator(context) }
     val cacheSizeBytes = remember(indexingProgress) { thumbnailGenerator.getThumbnailCacheSize() }
@@ -80,6 +88,11 @@ fun IndexingStatusScreen(
                         Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.back), tint = TextPrimaryDark)
                     }
                 },
+                actions = {
+                    IconButton(onClick = onOpenDiagnostic, modifier = Modifier.testTag("open_diagnostic_button")) {
+                        Icon(imageVector = Icons.Default.BugReport, contentDescription = "Open Diagnostic Screen", tint = AmberAccent)
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = SurfaceDark)
             )
         },
@@ -89,6 +102,7 @@ fun IndexingStatusScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
+                .verticalScroll(rememberScrollState())
                 .padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
@@ -112,6 +126,62 @@ fun IndexingStatusScreen(
                     Column {
                         Text(stringResource(R.string.omex_offline_engine), color = TextPrimaryDark, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                         Text(stringResource(R.string.indexing_phase_1), color = TextMutedDark, style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+            }
+
+            // Diagnostic Panel Card
+            Card(
+                colors = CardDefaults.cardColors(containerColor = SurfaceCard),
+                shape = RoundedCornerShape(16.dp),
+                modifier = Modifier.fillMaxWidth().testTag("diagnostic_panel")
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "لوحة تشخيص الفهرسة (Diagnostic Panel)",
+                            color = AmberAccent,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                        if (diagnosticState.lastRunTime.isNotEmpty()) {
+                            Text(
+                                text = diagnosticState.lastRunTime,
+                                color = TextMutedDark,
+                                fontSize = 11.sp
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    DiagnosticRow("MediaStore images count", if (diagnosticState.hasRun) diagnosticState.mediaStoreImagesCount.toString() else "?")
+                    DiagnosticRow("MediaStore videos count", if (diagnosticState.hasRun) diagnosticState.mediaStoreVideosCount.toString() else "?")
+                    DiagnosticRow("images parsed", if (diagnosticState.hasRun) diagnosticState.imagesParsed.toString() else "?")
+                    DiagnosticRow("videos parsed", if (diagnosticState.hasRun) diagnosticState.videosParsed.toString() else "?")
+                    DiagnosticRow("items before insert", if (diagnosticState.hasRun) diagnosticState.itemsBeforeInsert.toString() else "?")
+                    DiagnosticRow("items inserted", if (diagnosticState.hasRun) diagnosticState.itemsInserted.toString() else "?")
+                    DiagnosticRow("Room total items after insert", if (diagnosticState.hasRun) diagnosticState.roomTotalItemsAfterInsert.toString() else "?")
+                    DiagnosticRow("Gallery UI item count", if (diagnosticState.hasRun) diagnosticState.galleryUiItemCount.toString() else "?")
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    Button(
+                        onClick = { galleryViewModel.runIndexingDiagnostic(context) },
+                        enabled = !diagnosticState.isRunning,
+                        colors = ButtonDefaults.buttonColors(containerColor = AmberAccent),
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.fillMaxWidth().testTag("run_diagnostic_button")
+                    ) {
+                        if (diagnosticState.isRunning) {
+                            Text("جاري تشخيص الفهرسة...", color = ObsidianBg, fontWeight = FontWeight.Bold)
+                        } else {
+                            Text("تشغيل تشخيص الفهرسة", color = ObsidianBg, fontWeight = FontWeight.Bold)
+                        }
                     }
                 }
             }
@@ -151,8 +221,6 @@ fun IndexingStatusScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.weight(1f))
-
             // Rescan Button
             Button(
                 onClick = { galleryViewModel.triggerFullReindex(context) },
@@ -168,6 +236,19 @@ fun IndexingStatusScreen(
                 Text(stringResource(R.string.trigger_full_reindex), color = ObsidianBg, fontWeight = FontWeight.Bold)
             }
         }
+    }
+}
+
+@Composable
+private fun DiagnosticRow(label: String, value: String) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 3.dp),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(text = label, color = TextMutedDark, fontSize = 13.sp)
+        Text(text = value, color = CyanAccent, fontWeight = FontWeight.Bold, fontSize = 13.sp)
     }
 }
 

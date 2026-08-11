@@ -43,6 +43,15 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Category
+import androidx.compose.material.icons.filled.CropFree
+import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.DirectionsCar
+import androidx.compose.material.icons.filled.Flight
+import androidx.compose.material.icons.filled.Park
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Restaurant
+import androidx.compose.material.icons.filled.ShowChart
+import androidx.compose.material.icons.filled.Work
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CheckCircleOutline
@@ -93,6 +102,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -183,6 +193,8 @@ fun GalleryScreen(
     val personGroups by viewModel.personGroups.collectAsStateWithLifecycle()
     val duplicateGroups by viewModel.duplicateGroups.collectAsStateWithLifecycle()
     val selectedItemIds by viewModel.selectedItemIds.collectAsStateWithLifecycle()
+    val selectedCategoryIds by viewModel.selectedCategoryIds.collectAsStateWithLifecycle()
+    val categories by viewModel.categories.collectAsStateWithLifecycle()
 
     var isFilterPanelExpanded by remember { mutableStateOf(false) }
     var isSortMenuExpanded by remember { mutableStateOf(false) }
@@ -231,6 +243,7 @@ fun GalleryScreen(
     LaunchedEffect(isMediaPermissionGranted) {
         if (isMediaPermissionGranted) {
             viewModel.triggerGalleryScan(context)
+            viewModel.classifyUnclassifiedMedia(context)
         } else {
             permissionsState.launchMultiplePermissionRequest()
         }
@@ -560,6 +573,96 @@ fun GalleryScreen(
                                     border = null,
                                     shape = RoundedCornerShape(20.dp),
                                     modifier = Modifier.testTag("tab_${tab.name.lowercase()}")
+                                )
+                            }
+                        }
+                    }
+
+                    // Smart Virtual Folders Section Header
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 4.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.Category,
+                                    contentDescription = null,
+                                    tint = AmberAccent,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "المجلدات الذكية",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = AmberAccent
+                                )
+                            }
+                            if (selectedCategoryIds.isNotEmpty()) {
+                                TextButton(
+                                    onClick = { viewModel.clearCategoryFilters() },
+                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
+                                ) {
+                                    Text("إلغاء التصفية (${selectedCategoryIds.size})", fontSize = 11.sp, color = CyanAccent)
+                                }
+                            }
+                        }
+
+                        // Smart Virtual Folder Chips
+                        LazyRow(
+                            contentPadding = PaddingValues(vertical = 4.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            items(categories, key = { it.categoryId }) { category ->
+                                val isCatSelected = selectedCategoryIds.contains(category.categoryId)
+                                FilterChip(
+                                    selected = isCatSelected,
+                                    onClick = { viewModel.toggleCategoryFilter(category.categoryId) },
+                                    label = {
+                                        Text(
+                                            text = category.nameArabic,
+                                            fontSize = 12.sp,
+                                            fontWeight = if (isCatSelected) FontWeight.Bold else FontWeight.Normal
+                                        )
+                                    },
+                                    leadingIcon = {
+                                        val icon = when (category.categoryId) {
+                                            "PERSON" -> Icons.Default.Person
+                                            "PRODUCT" -> Icons.Default.AutoAwesome
+                                            "TRADING" -> Icons.Default.ShowChart
+                                            "SCREENSHOT" -> Icons.Default.CropFree
+                                            "DOCUMENT" -> Icons.Default.Description
+                                            "CAR" -> Icons.Default.DirectionsCar
+                                            "FOOD" -> Icons.Default.Restaurant
+                                            "NATURE" -> Icons.Default.Park
+                                            "TRAVEL" -> Icons.Default.Flight
+                                            "WORK" -> Icons.Default.Work
+                                            else -> Icons.Default.Category
+                                        }
+                                        Icon(
+                                            imageVector = icon,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(14.dp)
+                                        )
+                                    },
+                                    colors = FilterChipDefaults.filterChipColors(
+                                        selectedContainerColor = AmberAccent,
+                                        selectedLabelColor = ObsidianBg,
+                                        selectedLeadingIconColor = ObsidianBg,
+                                        containerColor = SurfaceDark,
+                                        labelColor = TextPrimaryDark,
+                                        iconColor = AmberAccent
+                                    ),
+                                    shape = RoundedCornerShape(16.dp),
+                                    border = null,
+                                    modifier = Modifier.testTag("smart_folder_chip_${category.categoryId}")
                                 )
                             }
                         }

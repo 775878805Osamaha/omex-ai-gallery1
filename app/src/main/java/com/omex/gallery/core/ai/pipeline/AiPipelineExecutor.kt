@@ -5,13 +5,17 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
 import com.omex.gallery.core.data.local.AiDao
+import com.omex.gallery.core.data.local.CategoryDao
 import com.omex.gallery.core.data.local.DetectedFaceEntity
 import com.omex.gallery.core.data.local.DetectedObjectEntity
 import com.omex.gallery.core.data.local.FaceEmbeddingEntity
 import com.omex.gallery.core.data.local.ImageClassificationEntity
 import com.omex.gallery.core.data.local.ImageMetadataEntity
+import com.omex.gallery.core.data.local.MediaItemCategoryCrossRef
 import com.omex.gallery.core.data.local.OcrTextEntity
 import com.omex.gallery.domain.model.MediaItem
+import com.omex.gallery.domain.model.toEntity
+import com.omex.gallery.core.ai.classifier.CategoryClassifier
 import com.omex.gallery.core.ai.classifier.DefaultImageClassifier
 import com.omex.gallery.core.ai.detector.DefaultObjectDetector
 import com.omex.gallery.core.ai.faces.DefaultFaceDetector
@@ -29,6 +33,7 @@ import java.security.MessageDigest
 class AiPipelineExecutor(
     private val context: Context,
     private val aiDao: AiDao,
+    private val categoryDao: CategoryDao? = null,
     private val classifier: DefaultImageClassifier = DefaultImageClassifier(context),
     private val detector: DefaultObjectDetector = DefaultObjectDetector(context),
     private val faceDetector: DefaultFaceDetector = DefaultFaceDetector(context),
@@ -53,10 +58,11 @@ class AiPipelineExecutor(
 
             try {
                 // Task 0: On-Device OCR Text Extraction
+                var ocrEntity: OcrTextEntity? = null
                 val ocrResult = ocrEngine.processImage(bitmap)
                 if (ocrResult.isSuccess) {
                     val result = ocrResult.getOrThrow()
-                    val entity = OcrTextEntity(
+                    ocrEntity = OcrTextEntity(
                         mediaId = mediaItem.id,
                         extractedText = result.extractedText,
                         language = result.language,
@@ -65,9 +71,9 @@ class AiPipelineExecutor(
                         createdAt = System.currentTimeMillis(),
                         updatedAt = System.currentTimeMillis()
                     )
-                    aiDao.insertOcrText(entity)
+                    aiDao.insertOcrText(ocrEntity)
                 } else {
-                    val entity = OcrTextEntity(
+                    ocrEntity = OcrTextEntity(
                         mediaId = mediaItem.id,
                         extractedText = "",
                         processingStatus = "FAILED",
@@ -75,7 +81,7 @@ class AiPipelineExecutor(
                         createdAt = System.currentTimeMillis(),
                         updatedAt = System.currentTimeMillis()
                     )
-                    aiDao.insertOcrText(entity)
+                    aiDao.insertOcrText(ocrEntity)
                 }
 
                 // Task 1: Hashes & Metadata
@@ -102,10 +108,11 @@ class AiPipelineExecutor(
                 aiDao.insertImageMetadata(metadataEntity)
 
                 // Task 2: MobileNetV3 Classification
+                var classEntities: List<ImageClassificationEntity> = emptyList()
                 val classRes = classifier.classifyImage(bitmap, topK = 5)
                 if (classRes.isSuccess) {
                     val classifications = classRes.getOrThrow()
-                    val classEntities = classifications.map {
+                    classEntities = classifications.map {
                         ImageClassificationEntity(
                             mediaId = mediaItem.id,
                             classId = it.classId,
@@ -118,10 +125,11 @@ class AiPipelineExecutor(
                 }
 
                 // Task 3: YOLOv8 Object Detection
+                var objEntities: List<DetectedObjectEntity> = emptyList()
                 val detRes = detector.detectObjects(bitmap)
                 if (detRes.isSuccess) {
                     val detections = detRes.getOrThrow().boxes
-                    val objEntities = detections.map {
+                    objEntities = detections.map {
                         DetectedObjectEntity(
                             mediaId = mediaItem.id,
                             classId = it.classId,
@@ -137,11 +145,12 @@ class AiPipelineExecutor(
                 }
 
                 // Task 4: Face Detection & FaceNet Embeddings
+                var faceEntities: List<DetectedFaceEntity> = emptyList()
                 val faceRes = faceDetector.detectFaces(bitmap)
                 if (faceRes.isSuccess) {
                     val faces = faceRes.getOrThrow()
                     if (faces.isNotEmpty()) {
-                        val faceEntities = faces.map {
+                        faceEntities = faces.map {
                             DetectedFaceEntity(
                                 mediaId = mediaItem.id,
                                 left = it.left,
@@ -176,6 +185,22 @@ class AiPipelineExecutor(
                             }
                         }
                     }
+                }
+
+                // Task 5: Virtual Category Classification & Persistence
+                if (categoryDao != null) {
+                    val categoryIds = CategoryClassifier.classifyMediaItem(
+                        mediaItem = mediaItem.toEntity(),
+                        classifications = classEntities,
+                        objects = objEntities,
+                        faces = faceEntities,
+                        ocrText = ocrEntity
+                    )
+                    categoryDao.clearCategoriesForMedia(mediaItem.id)
+                    val crossRefs = categoryIds.map { catId ->
+                        MediaItemCategoryCrossRef(mediaId = mediaItem.id, categoryId = catId)
+                    }
+                    categoryDao.insertCrossRefs(crossRefs)
                 }
 
                 Result.success(true)

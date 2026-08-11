@@ -22,9 +22,11 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         ImageMetadataEntity::class,
         OcrTextEntity::class,
         ChatSessionEntity::class,
-        ChatMessageEntity::class
+        ChatMessageEntity::class,
+        MediaCategoryEntity::class,
+        MediaItemCategoryCrossRef::class
     ],
-    version = 6,
+    version = 7,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -32,6 +34,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun mediaDao(): MediaDao
     abstract fun aiDao(): AiDao
     abstract fun chatDao(): ChatDao
+    abstract fun categoryDao(): CategoryDao
 
     companion object {
         @Volatile
@@ -80,6 +83,41 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS `media_categories` (
+                        `categoryId` TEXT NOT NULL,
+                        `nameArabic` TEXT NOT NULL,
+                        `iconName` TEXT,
+                        PRIMARY KEY(`categoryId`)
+                    )
+                """.trimIndent())
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS `media_item_category_cross_ref` (
+                        `mediaId` INTEGER NOT NULL,
+                        `categoryId` TEXT NOT NULL,
+                        PRIMARY KEY(`mediaId`, `categoryId`)
+                    )
+                """.trimIndent())
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_media_item_category_cross_ref_mediaId` ON `media_item_category_cross_ref` (`mediaId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_media_item_category_cross_ref_categoryId` ON `media_item_category_cross_ref` (`categoryId`)")
+
+                // Pre-populate default virtual categories
+                db.execSQL("INSERT OR IGNORE INTO `media_categories` (`categoryId`, `nameArabic`, `iconName`) VALUES ('PERSON', 'الأشخاص', 'person')")
+                db.execSQL("INSERT OR IGNORE INTO `media_categories` (`categoryId`, `nameArabic`, `iconName`) VALUES ('PRODUCT', 'المنتجات', 'shopping_bag')")
+                db.execSQL("INSERT OR IGNORE INTO `media_categories` (`categoryId`, `nameArabic`, `iconName`) VALUES ('TRADING', 'التداول', 'show_chart')")
+                db.execSQL("INSERT OR IGNORE INTO `media_categories` (`categoryId`, `nameArabic`, `iconName`) VALUES ('SCREENSHOT', 'لقطات الشاشة', 'crop_free')")
+                db.execSQL("INSERT OR IGNORE INTO `media_categories` (`categoryId`, `nameArabic`, `iconName`) VALUES ('DOCUMENT', 'المستندات', 'description')")
+                db.execSQL("INSERT OR IGNORE INTO `media_categories` (`categoryId`, `nameArabic`, `iconName`) VALUES ('CAR', 'السيارات', 'directions_car')")
+                db.execSQL("INSERT OR IGNORE INTO `media_categories` (`categoryId`, `nameArabic`, `iconName`) VALUES ('FOOD', 'الطعام', 'restaurant')")
+                db.execSQL("INSERT OR IGNORE INTO `media_categories` (`categoryId`, `nameArabic`, `iconName`) VALUES ('NATURE', 'الطبيعة', 'park')")
+                db.execSQL("INSERT OR IGNORE INTO `media_categories` (`categoryId`, `nameArabic`, `iconName`) VALUES ('TRAVEL', 'السفر', 'flight')")
+                db.execSQL("INSERT OR IGNORE INTO `media_categories` (`categoryId`, `nameArabic`, `iconName`) VALUES ('WORK', 'صور العمل', 'work')")
+                db.execSQL("INSERT OR IGNORE INTO `media_categories` (`categoryId`, `nameArabic`, `iconName`) VALUES ('OTHER', 'أخرى', 'category')")
+            }
+        }
+
         fun getInstance(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -87,7 +125,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "omex_ai_gallery.db"
                 )
-                    .addMigrations(MIGRATION_4_5, MIGRATION_5_6)
+                    .addMigrations(MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
                     .setJournalMode(RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING)
                     .build()
                 INSTANCE = instance

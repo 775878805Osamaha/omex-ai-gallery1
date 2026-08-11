@@ -138,6 +138,11 @@ class AskImageTest {
     }
 
     private class FakeMediaRepository : MediaRepository {
+        override suspend fun getRoomMediaCount(): Int = 0
+        override suspend fun getRoomPhotosCount(): Int = 0
+        override suspend fun getRoomVideosCount(): Int = 0
+        override suspend fun getLastIndexingError(): String = "None"
+
         override suspend fun getMediaById(id: Long): MediaItem {
             return MediaItem(
                 id = id,

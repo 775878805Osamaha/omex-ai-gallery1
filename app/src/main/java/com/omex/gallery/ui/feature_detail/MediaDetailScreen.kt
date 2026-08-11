@@ -61,6 +61,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -86,6 +87,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
+import kotlinx.coroutines.launch
 import com.omex.gallery.R
 import com.omex.gallery.domain.model.MediaItem
 import com.omex.gallery.ui.feature_gallery.translateMlCategoryOrLabel
@@ -97,6 +99,8 @@ import com.omex.gallery.ui.theme.SurfaceCard
 import com.omex.gallery.ui.theme.SurfaceDark
 import com.omex.gallery.ui.theme.TextMutedDark
 import com.omex.gallery.ui.theme.TextPrimaryDark
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -120,6 +124,9 @@ fun MediaDetailScreen(
     val sheetState = rememberModalBottomSheetState()
     var showBoundingBoxes by remember { mutableStateOf(true) }
     var showDeleteDialog by remember { mutableStateOf(false) }
+    var showShareSheet by remember { mutableStateOf(false) }
+    var isGeneratingDescription by remember { mutableStateOf(false) }
+    val coroutineScope = androidx.compose.runtime.rememberCoroutineScope()
 
     val pagerState = rememberPagerState(
         initialPage = currentIndex.coerceAtLeast(0),
@@ -225,14 +232,7 @@ fun MediaDetailScreen(
                             )
                         }
                         IconButton(
-                            onClick = {
-                                val shareIntent = Intent(Intent.ACTION_SEND).apply {
-                                    type = item.mimeType
-                                    putExtra(Intent.EXTRA_STREAM, Uri.parse(item.uriString))
-                                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                                }
-                                context.startActivity(Intent.createChooser(shareIntent, "Share Media"))
-                            },
+                            onClick = { showShareSheet = true },
                             modifier = Modifier.testTag("detail_share_button")
                         ) {
                             Icon(
@@ -358,6 +358,174 @@ fun MediaDetailScreen(
                     }
                 }
             }
+        }
+
+        // Share Options Sheet
+        if (showShareSheet && mediaItem != null) {
+            val item = mediaItem!!
+            ModalBottomSheet(
+                onDismissRequest = { showShareSheet = false },
+                containerColor = SurfaceDark
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(24.dp)
+                ) {
+                    Text(
+                        text = "خيارات المشاركة",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = TextPrimaryDark,
+                        modifier = Modifier.padding(bottom = 16.dp)
+                    )
+
+                    // Option 1: Customer Share (Product Description via AI)
+                    if (!item.isVideo) {
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = SurfaceCard),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 12.dp)
+                                .clickable {
+                                    showShareSheet = false
+                                    isGeneratingDescription = true
+                                    coroutineScope.launch {
+                                        val details = aiDetails ?: com.omex.gallery.domain.model.MediaItemWithAi(
+                                            mediaItem = item,
+                                            classifications = emptyList(),
+                                            objects = emptyList(),
+                                            faces = emptyList(),
+                                            metadata = null,
+                                            ocrText = null
+                                        )
+                                        val desc = com.omex.gallery.core.ai.share.AiShareDescriptionGenerator.generateProductDescription(context, details)
+                                        isGeneratingDescription = false
+
+                                        val whatsappIntent = Intent(Intent.ACTION_SEND).apply {
+                                            type = item.mimeType
+                                            putExtra(Intent.EXTRA_STREAM, Uri.parse(item.uriString))
+                                            putExtra(Intent.EXTRA_TEXT, desc)
+                                            setPackage("com.whatsapp")
+                                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                        }
+                                        try {
+                                            context.startActivity(whatsappIntent)
+                                        } catch (e: Exception) {
+                                            val chooser = Intent(Intent.ACTION_SEND).apply {
+                                                type = item.mimeType
+                                                putExtra(Intent.EXTRA_STREAM, Uri.parse(item.uriString))
+                                                putExtra(Intent.EXTRA_TEXT, desc)
+                                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                            }
+                                            context.startActivity(Intent.createChooser(chooser, "مشاركة المنتج للعميل"))
+                                        }
+                                    }
+                                }
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(16.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = AmberAccent, modifier = Modifier.size(28.dp))
+                                Spacer(modifier = Modifier.width(16.dp))
+                                Column {
+                                    Text("مشاركة للعميل (وصف ذكي بالذكاء الاصطناعي)", color = TextPrimaryDark, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                                    Text("توليد وصف مبيعات احترافي وقصير وإرفاق الصورة عبر الواتساب", color = TextMutedDark, fontSize = 12.sp)
+                                }
+                            }
+                        }
+                    }
+
+                    // Option 2: Direct WhatsApp Share
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = SurfaceCard),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 12.dp)
+                            .clickable {
+                                showShareSheet = false
+                                val whatsappIntent = Intent(Intent.ACTION_SEND).apply {
+                                    type = item.mimeType
+                                    putExtra(Intent.EXTRA_STREAM, Uri.parse(item.uriString))
+                                    setPackage("com.whatsapp")
+                                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                }
+                                try {
+                                    context.startActivity(whatsappIntent)
+                                } catch (e: Exception) {
+                                    val chooser = Intent(Intent.ACTION_SEND).apply {
+                                        type = item.mimeType
+                                        putExtra(Intent.EXTRA_STREAM, Uri.parse(item.uriString))
+                                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                    }
+                                    context.startActivity(Intent.createChooser(chooser, "مشاركة عبر واتساب"))
+                                }
+                            }
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Default.Share, contentDescription = null, tint = CyanAccent, modifier = Modifier.size(28.dp))
+                            Spacer(modifier = Modifier.width(16.dp))
+                            Column {
+                                Text("مشاركة عبر واتساب", color = TextPrimaryDark, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                                Text("إرسال الوسائط مباشرة إلى محادثة واتساب", color = TextMutedDark, fontSize = 12.sp)
+                            }
+                        }
+                    }
+
+                    // Option 3: General Share
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = SurfaceCard),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                showShareSheet = false
+                                val chooserIntent = Intent(Intent.ACTION_SEND).apply {
+                                    type = item.mimeType
+                                    putExtra(Intent.EXTRA_STREAM, Uri.parse(item.uriString))
+                                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                }
+                                context.startActivity(Intent.createChooser(chooserIntent, "المشاركة العامة"))
+                            }
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Default.Share, contentDescription = null, tint = TextPrimaryDark, modifier = Modifier.size(28.dp))
+                            Spacer(modifier = Modifier.width(16.dp))
+                            Column {
+                                Text("المشاركة العامة", color = TextPrimaryDark, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                                Text("مشاركة الملف مع أية تطبيقات أخرى مثبتة", color = TextMutedDark, fontSize = 12.sp)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        if (isGeneratingDescription) {
+            AlertDialog(
+                onDismissRequest = {},
+                title = { Text("توليد وصف المنتج بالذكاء الاصطناعي", color = TextPrimaryDark, fontWeight = FontWeight.Bold) },
+                text = {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        CircularProgressIndicator(color = AmberAccent)
+                        Text("جاري قراءة الصورة وتوليد وصف تسويقي احترافي للعميل...", color = TextMutedDark)
+                    }
+                },
+                confirmButton = {},
+                containerColor = SurfaceDark
+            )
         }
 
         // AI & EXIF Sheet
@@ -493,22 +661,113 @@ fun MediaItemContentViewer(
     aiDetails: com.omex.gallery.domain.model.MediaItemWithAi?
 ) {
     if (item.isVideo) {
-        // Native Interactive Video View Player
+        val context = LocalContext.current
+        var playerState by remember(item.id) { mutableStateOf("Initializing") }
+        var isPrepared by remember(item.id) { mutableStateOf(false) }
+        var isPlaying by remember(item.id) { mutableStateOf(false) }
+        var playbackError by remember(item.id) { mutableStateOf<String?>(null) }
+        var canOpenFd by remember(item.id) { mutableStateOf(false) }
+        var activeVideoView by remember(item.id) { mutableStateOf<VideoView?>(null) }
+
+        // Test if ContentResolver can open AssetFileDescriptor for the URI
+        LaunchedEffect(item.uriString) {
+            withContext(Dispatchers.IO) {
+                try {
+                    val uri = Uri.parse(item.uriString)
+                    context.contentResolver.openAssetFileDescriptor(uri, "r")?.use {
+                        canOpenFd = true
+                    } ?: run {
+                        canOpenFd = false
+                    }
+                } catch (e: Exception) {
+                    canOpenFd = false
+                    playbackError = "FD open failed: ${e.localizedMessage}"
+                }
+            }
+        }
+
+        DisposableEffect(item.id) {
+            onDispose {
+                activeVideoView?.stopPlayback()
+                activeVideoView = null
+            }
+        }
+
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             AndroidView(
-                factory = { context ->
-                    VideoView(context).apply {
-                        val mediaController = MediaController(context)
+                factory = { ctx ->
+                    VideoView(ctx).apply {
+                        activeVideoView = this
+                        val mediaController = MediaController(ctx)
                         mediaController.setAnchorView(this)
                         setMediaController(mediaController)
-                        setVideoURI(Uri.parse(item.uriString))
-                        requestFocus()
+
+                        setOnPreparedListener { mp ->
+                            isPrepared = true
+                            try {
+                                mp.isLooping = true
+                                mp.start()
+                                isPlaying = true
+                                playerState = "Prepared & Playing (Duration: ${mp.duration / 1000}s)"
+                            } catch (e: Exception) {
+                                playbackError = "Start exception: ${e.localizedMessage}"
+                                playerState = "Start Failed"
+                            }
+                        }
+
+                        setOnErrorListener { _, what, extra ->
+                            val err = "Playback error (what=$what, extra=$extra)"
+                            playbackError = err
+                            playerState = "Error ($what, $extra)"
+                            true // Handled error
+                        }
+
+                        try {
+                            setVideoURI(Uri.parse(item.uriString))
+                            requestFocus()
+                            playerState = "URI set, preparing..."
+                        } catch (e: Exception) {
+                            playbackError = "setVideoURI exception: ${e.localizedMessage}"
+                            playerState = "setVideoURI Failed"
+                        }
+                    }
+                },
+                update = { view ->
+                    activeVideoView = view
+                    // Ensure playback starts if uri changed
+                    try {
+                        view.setVideoURI(Uri.parse(item.uriString))
+                    } catch (e: Exception) {
+                        playbackError = "Update exception: ${e.localizedMessage}"
                     }
                 },
                 modifier = Modifier
                     .fillMaxSize()
                     .testTag("video_player_view")
             )
+
+            // Diagnostic Playback Overlay
+            Card(
+                colors = CardDefaults.cardColors(containerColor = SurfaceDark.copy(alpha = 0.85f)),
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(12.dp)
+                    .testTag("video_diagnostic_overlay")
+            ) {
+                Column(modifier = Modifier.padding(10.dp)) {
+                    Text(text = "🎬 Diagnostic Video Player", color = AmberAccent, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(text = "URI: ${item.uriString}", color = TextPrimaryDark, fontSize = 11.sp, maxLines = 1)
+                    Text(text = "MIME: ${item.mimeType}", color = TextMutedDark, fontSize = 11.sp)
+                    Text(text = "Can Open FD: $canOpenFd", color = if (canOpenFd) CyanAccent else Color.Red, fontSize = 11.sp)
+                    Text(text = "State: $playerState", color = CyanAccent, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                    Text(text = "Prepared: $isPrepared | Playing: $isPlaying", color = TextPrimaryDark, fontSize = 11.sp)
+                    if (playbackError != null) {
+                        Text(text = "Error: $playbackError", color = Color.Red, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
         }
     } else {
         // Zoomable & Pannable Image Viewer

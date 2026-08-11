@@ -56,10 +56,15 @@ class AppContainer(private val context: Context) {
         LiteRtAskImageEngine(multimodalModelManager, multimodalModelRepository)
     }
 
+    val categoryDao: com.omex.gallery.core.data.local.CategoryDao by lazy {
+        database.categoryDao()
+    }
+
     val mediaRepository: MediaRepository by lazy {
         MediaRepositoryImpl(
             mediaDao = database.mediaDao(),
             aiDao = database.aiDao(),
+            categoryDao = categoryDao,
             context = context
         )
     }

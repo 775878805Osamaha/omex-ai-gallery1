@@ -38,12 +38,29 @@ enum class MediaFilterTab {
     ALL, PHOTOS, VIDEOS, FAVORITES, PEOPLE, DUPLICATES
 }
 
+data class DiagnosticResultState(
+    val mediaStoreImagesCount: Int = 0,
+    val mediaStoreVideosCount: Int = 0,
+    val imagesParsed: Int = 0,
+    val videosParsed: Int = 0,
+    val itemsBeforeInsert: Int = 0,
+    val itemsInserted: Int = 0,
+    val roomTotalItemsAfterInsert: Int = 0,
+    val galleryUiItemCount: Int = 0,
+    val isRunning: Boolean = false,
+    val hasRun: Boolean = false,
+    val lastRunTime: String = ""
+)
+
 /**
  * ViewModel managing gallery state, navigation tabs, album grouping, sorting, selection actions, AI indexing, and filters.
  */
 class GalleryViewModel(
     private val repository: MediaRepository
 ) : ViewModel() {
+
+    private val _diagnosticState = MutableStateFlow(DiagnosticResultState())
+    val diagnosticState: StateFlow<DiagnosticResultState> = _diagnosticState.asStateFlow()
 
     private val _selectedNavTab = MutableStateFlow(NavTab.GALLERY)
     val selectedNavTab: StateFlow<NavTab> = _selectedNavTab.asStateFlow()
@@ -65,6 +82,31 @@ class GalleryViewModel(
 
     private val _selectedItemIds = MutableStateFlow<Set<Long>>(emptySet())
     val selectedItemIds: StateFlow<Set<Long>> = _selectedItemIds.asStateFlow()
+
+    private val _selectedCategoryIds = MutableStateFlow<Set<String>>(emptySet())
+    val selectedCategoryIds: StateFlow<Set<String>> = _selectedCategoryIds.asStateFlow()
+
+    fun toggleCategoryFilter(categoryId: String) {
+        val current = _selectedCategoryIds.value
+        _selectedCategoryIds.value = if (current.contains(categoryId)) {
+            current - categoryId
+        } else {
+            current + categoryId
+        }
+    }
+
+    fun clearCategoryFilters() {
+        _selectedCategoryIds.value = emptySet()
+    }
+
+    val categories: StateFlow<List<com.omex.gallery.core.data.local.MediaCategoryEntity>> = repository.getAllCategories()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    fun classifyUnclassifiedMedia(context: Context) {
+        viewModelScope.launch {
+            repository.classifyUnclassifiedMedia(context)
+        }
+    }
 
     fun selectNavTab(tab: NavTab) {
         _selectedNavTab.value = tab
@@ -252,11 +294,14 @@ class GalleryViewModel(
         _selectedTab,
         _searchFilterState,
         _selectedAlbum,
-        _sortOrder
-    ) { tab, filterState, album, sortOrder ->
-        Tuple4(tab, filterState, album, sortOrder)
-    }.flatMapLatest { (tab, filterState, album, sortOrder) ->
-        val baseFlow = if (filterState.hasActiveFilters) {
+        _sortOrder,
+        _selectedCategoryIds
+    ) { tab, filterState, album, sortOrder, categoryIds ->
+        Tuple5(tab, filterState, album, sortOrder, categoryIds)
+    }.flatMapLatest { (tab, filterState, album, sortOrder, categoryIds) ->
+        val baseFlow = if (categoryIds.isNotEmpty()) {
+            repository.getMediaForCategories(categoryIds.toList())
+        } else if (filterState.hasActiveFilters) {
             repository.searchMediaAdvanced(filterState)
         } else {
             when (tab) {
@@ -270,6 +315,16 @@ class GalleryViewModel(
 
         baseFlow.map { list ->
             var filtered = list
+
+            // Apply tab filter if category filter is active along with tabs (e.g. PHOTOS + PRODUCT)
+            if (categoryIds.isNotEmpty()) {
+                filtered = when (tab) {
+                    MediaFilterTab.PHOTOS -> filtered.filter { !it.isVideo }
+                    MediaFilterTab.VIDEOS -> filtered.filter { it.isVideo }
+                    MediaFilterTab.FAVORITES -> filtered.filter { it.isFavorite }
+                    else -> filtered
+                }
+            }
 
             // Apply selected album filter if active
             if (album != null) {
@@ -350,10 +405,70 @@ class GalleryViewModel(
 
     fun triggerGalleryScan(context: Context) {
         IndexScheduler(context.applicationContext).enqueueNormalSync()
+        viewModelScope.launch {
+            repository.scanAndIndexGallery()
+        }
     }
 
     fun triggerFullReindex(context: Context) {
         IndexScheduler(context.applicationContext).enqueueFullReindex()
+        viewModelScope.launch {
+            repository.scanAndIndexGallery(isFullReindex = true)
+        }
+    }
+
+    fun runIndexingDiagnostic(context: Context) {
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            _diagnosticState.value = _diagnosticState.value.copy(isRunning = true)
+            try {
+                val scanner = com.omex.gallery.core.indexer.MediaScanner(context.applicationContext)
+                val scanData = scanner.scanWithDiagnosticCounts()
+
+                val itemsBeforeInsert = repository.getAllMediaItems().size
+
+                val mediaItemsToInsert = scanData.rawItems.map { raw ->
+                    MediaItem(
+                        id = raw.id,
+                        uriString = raw.contentUri.toString(),
+                        filePath = raw.filePath,
+                        fileName = raw.displayName,
+                        mimeType = raw.mimeType,
+                        isVideo = raw.isVideo,
+                        width = raw.width,
+                        height = raw.height,
+                        sizeBytes = raw.sizeBytes,
+                        dateTaken = raw.dateTaken,
+                        dateModified = raw.dateModified,
+                        durationMs = raw.durationMs
+                    )
+                }
+
+                if (mediaItemsToInsert.isNotEmpty()) {
+                    repository.insertMediaItems(mediaItemsToInsert)
+                }
+
+                val roomTotalItemsAfterInsert = repository.getAllMediaItems().size
+                val currentUiCount = mediaItems.value.size
+
+                val timeStr = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())
+
+                _diagnosticState.value = DiagnosticResultState(
+                    mediaStoreImagesCount = scanData.imagesCursorCount,
+                    mediaStoreVideosCount = scanData.videosCursorCount,
+                    imagesParsed = scanData.imagesParsedCount,
+                    videosParsed = scanData.videosParsedCount,
+                    itemsBeforeInsert = itemsBeforeInsert,
+                    itemsInserted = mediaItemsToInsert.size,
+                    roomTotalItemsAfterInsert = roomTotalItemsAfterInsert,
+                    galleryUiItemCount = currentUiCount,
+                    isRunning = false,
+                    hasRun = true,
+                    lastRunTime = timeStr
+                )
+            } catch (e: Exception) {
+                _diagnosticState.value = _diagnosticState.value.copy(isRunning = false)
+            }
+        }
     }
 
     fun triggerAiScan(context: Context) {
@@ -381,5 +496,13 @@ private data class Tuple4<A, B, C, D>(
     val b: B,
     val c: C,
     val d: D
+)
+
+private data class Tuple5<A, B, C, D, E>(
+    val a: A,
+    val b: B,
+    val c: C,
+    val d: D,
+    val e: E
 )
 

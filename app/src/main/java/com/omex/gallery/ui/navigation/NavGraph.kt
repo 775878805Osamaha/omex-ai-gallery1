@@ -17,6 +17,7 @@ import com.omex.gallery.ui.feature_detail.MediaDetailScreen
 import com.omex.gallery.ui.feature_detail.MediaDetailViewModel
 import com.omex.gallery.ui.feature_gallery.GalleryScreen
 import com.omex.gallery.ui.feature_gallery.GalleryViewModel
+import com.omex.gallery.ui.feature_diagnostic.DiagnosticScreen
 import com.omex.gallery.ui.feature_indexing.IndexingStatusScreen
 import com.omex.gallery.ui.feature_search.SearchScreen
 import com.omex.gallery.ui.feature_search.SearchViewModel
@@ -32,6 +33,7 @@ sealed class Screen(val route: String) {
         fun createRoute(mediaId: Long) = "ask_image/$mediaId"
     }
     data object IndexingStatus : Screen("indexing_status")
+    data object Diagnostic : Screen("diagnostic")
 }
 
 @Composable
@@ -140,6 +142,14 @@ fun AppNavGraph(
         composable(Screen.IndexingStatus.route) {
             IndexingStatusScreen(
                 galleryViewModel = galleryViewModel,
+                onBackClick = { navController.popBackStack() },
+                onOpenDiagnostic = { navController.navigate(Screen.Diagnostic.route) }
+            )
+        }
+
+        composable(Screen.Diagnostic.route) {
+            DiagnosticScreen(
+                mediaRepository = appContainer.mediaRepository,
                 onBackClick = { navController.popBackStack() }
             )
         }
