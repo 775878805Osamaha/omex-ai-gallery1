@@ -41,6 +41,7 @@ class OcrAndSearchTest {
         repository = MediaRepositoryImpl(
             mediaDao = db.mediaDao(),
             aiDao = db.aiDao(),
+            categoryDao = db.categoryDao(),
             context = context
         )
         searchHistoryRepository = SearchHistoryRepository(context)

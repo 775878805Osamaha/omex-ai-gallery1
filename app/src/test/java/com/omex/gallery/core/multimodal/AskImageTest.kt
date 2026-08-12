@@ -189,5 +189,12 @@ class AskImageTest {
         override suspend fun runAiPipelineOnMedia(context: Context, mediaItem: MediaItem): Result<Boolean> = Result.success(true)
         override suspend fun runFullGalleryAiScan(context: Context): Result<Boolean> = Result.success(true)
         override suspend fun superResolveImage(context: Context, mediaItem: MediaItem, scaleFactor: Int, onProgress: (Float) -> Unit): Result<String> = Result.success("")
+        override fun getAllCategories(): Flow<List<com.omex.gallery.core.data.local.MediaCategoryEntity>> = flow { emit(emptyList()) }
+        override suspend fun getCategoriesForMedia(mediaId: Long): List<String> = emptyList()
+        override fun getCategoriesForMediaFlow(mediaId: Long): Flow<List<String>> = flow { emit(emptyList()) }
+        override fun getMediaForCategories(categoryIds: List<String>): Flow<List<MediaItem>> = flow { emit(emptyList()) }
+        override fun getCategoryMediaCount(categoryId: String): Flow<Int> = flow { emit(0) }
+        override suspend fun getLatestMediaForCategory(categoryId: String): MediaItem? = null
+        override suspend fun classifyUnclassifiedMedia(context: Context): Result<Int> = Result.success(0)
     }
 }

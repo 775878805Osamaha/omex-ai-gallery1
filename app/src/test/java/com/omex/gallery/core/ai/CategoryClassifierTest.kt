@@ -5,9 +5,7 @@ import com.omex.gallery.core.data.local.DetectedFaceEntity
 import com.omex.gallery.core.data.local.DetectedObjectEntity
 import com.omex.gallery.core.data.local.ImageClassificationEntity
 import com.omex.gallery.core.data.local.MediaItemEntity
-import com.omex.gallery.core.data.local.MediaType
 import com.omex.gallery.core.data.local.OcrTextEntity
-import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -20,13 +18,16 @@ class CategoryClassifierTest {
         name: String = "test.jpg"
     ) = MediaItemEntity(
         id = id,
-        fileName = name,
+        uriString = "file://$path",
         filePath = path,
-        fileSizeBytes = 1024L,
-        mediaType = MediaType.IMAGE,
+        fileName = name,
         mimeType = "image/jpeg",
-        dateAddedTimestamp = System.currentTimeMillis(),
-        dateModifiedTimestamp = System.currentTimeMillis()
+        isVideo = false,
+        width = 1080,
+        height = 1080,
+        sizeBytes = 1024L,
+        dateTaken = System.currentTimeMillis(),
+        dateModified = System.currentTimeMillis()
     )
 
     @Test
@@ -50,7 +51,7 @@ class CategoryClassifierTest {
     @Test
     fun test3_CandlestickChartWithIndicators() {
         val item = dummyMediaItem(name = "candlestick_chart.png")
-        val classifications = listOf(ImageClassificationEntity(mediaId = 1L, label = "candlestick chart", confidence = 0.95f, category = "financial chart"))
+        val classifications = listOf(ImageClassificationEntity(mediaId = 1L, classId = 1, label = "candlestick chart", category = "financial chart", confidence = 0.95f))
         val ocr = OcrTextEntity(mediaId = 1L, extractedText = "RSI Moving Average Support Resistance")
         val categories = CategoryClassifier.classifyMediaItem(mediaItem = item, classifications = classifications, ocrText = ocr)
 
@@ -99,8 +100,8 @@ class CategoryClassifierTest {
     @Test
     fun test8_PersonViewingTradingChart() {
         val item = dummyMediaItem(name = "person_chart.jpg")
-        val faces = listOf(DetectedFaceEntity(id = 1L, mediaId = 1L, boundingBox = "0,0,100,100", confidence = 0.98f))
-        val classifications = listOf(ImageClassificationEntity(mediaId = 1L, label = "person", confidence = 0.95f, category = "human"))
+        val faces = listOf(DetectedFaceEntity(id = 1L, mediaId = 1L, left = 0f, top = 0f, right = 100f, bottom = 100f, confidence = 0.98f))
+        val classifications = listOf(ImageClassificationEntity(mediaId = 1L, classId = 1, label = "person", category = "human", confidence = 0.95f))
         val ocr = OcrTextEntity(mediaId = 1L, extractedText = "TradingView BTC/USD Chart Analysis")
         val categories = CategoryClassifier.classifyMediaItem(mediaItem = item, classifications = classifications, faces = faces, ocrText = ocr)
 
@@ -111,8 +112,8 @@ class CategoryClassifierTest {
     @Test
     fun test9_ProductImageUnrelatedToTrading() {
         val item = dummyMediaItem(name = "running_shoes.jpg")
-        val objects = listOf(DetectedObjectEntity(mediaId = 1L, labelName = "shoe", confidence = 0.9f, boundingBox = "0,0,50,50"))
-        val classifications = listOf(ImageClassificationEntity(mediaId = 1L, label = "footwear", confidence = 0.92f, category = "product"))
+        val objects = listOf(DetectedObjectEntity(id = 1L, mediaId = 1L, classId = 1, labelName = "shoe", score = 0.9f, left = 0f, top = 0f, right = 50f, bottom = 50f))
+        val classifications = listOf(ImageClassificationEntity(mediaId = 1L, classId = 2, label = "footwear", category = "product", confidence = 0.92f))
         val ocr = OcrTextEntity(mediaId = 1L, extractedText = "Nike Running Shoes Air Max Red Size 42")
         val categories = CategoryClassifier.classifyMediaItem(mediaItem = item, classifications = classifications, objects = objects, ocrText = ocr)
 

@@ -36,6 +36,7 @@ class MediaRepositoryTest {
         repository = MediaRepositoryImpl(
             mediaDao = db.mediaDao(),
             aiDao = db.aiDao(),
+            categoryDao = db.categoryDao(),
             context = context
         )
     }
