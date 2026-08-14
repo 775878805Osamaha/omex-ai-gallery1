@@ -92,7 +92,7 @@ object CategoryClassifier {
             categories.add(CATEGORY_PERSON)
         }
 
-        // 4. CAR / Vehicle Detection
+        // 4. CAR Detection
         val carLabels = listOf("car", "vehicle", "automobile", "truck", "bus", "jeep", "sedan", "suv", "van", "motorcycle", "سيارة", "مركبة", "شاحنة")
         if (carLabels.any { pathLower.contains(it) || nameLower.contains(it) } ||
             objects.any { obj -> carLabels.any { obj.labelName.lowercase().contains(it) } } ||

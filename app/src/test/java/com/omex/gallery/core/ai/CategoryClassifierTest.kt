@@ -14,54 +14,56 @@ class CategoryClassifierTest {
 
     private fun dummyMediaItem(
         id: Long = 1L,
-        path: String = "/storage/emulated/0/DCIM/test.jpg",
-        name: String = "test.jpg"
+        path: String = "/storage/emulated/0/DCIM/Camera/IMG_20260101.jpg",
+        name: String = "IMG_20260101.jpg"
     ) = MediaItemEntity(
         id = id,
-        uriString = "file://$path",
+        uriString = "content://media/external/images/media/$id",
         filePath = path,
         fileName = name,
         mimeType = "image/jpeg",
         isVideo = false,
-        width = 1080,
+        width = 1920,
         height = 1080,
-        sizeBytes = 1024L,
+        sizeBytes = 1024 * 1024,
         dateTaken = System.currentTimeMillis(),
         dateModified = System.currentTimeMillis()
     )
 
     @Test
-    fun test1_TradingViewChart() {
-        val item = dummyMediaItem(name = "chart_analysis.jpg")
-        val ocr = OcrTextEntity(mediaId = 1L, extractedText = "TradingView BTC/USD Technical Analysis")
+    fun test1_TradingViewChartClassification() {
+        val item = dummyMediaItem(name = "tradingview_btc_analysis.jpg")
+        val ocr = OcrTextEntity(mediaId = 1L, extractedText = "TradingView BTCUSDT 1D Technical Analysis Bullish Flag")
         val categories = CategoryClassifier.classifyMediaItem(mediaItem = item, ocrText = ocr)
-        
+
         assertTrue("TradingView chart should be classified as TRADING", categories.contains(CategoryClassifier.CATEGORY_TRADING))
     }
 
     @Test
-    fun test2_MetaTraderChart() {
-        val item = dummyMediaItem(name = "mt5_forex.jpg")
-        val ocr = OcrTextEntity(mediaId = 1L, extractedText = "MetaTrader 5 EUR/USD Order Buy Sell Stop Loss Take Profit")
+    fun test2_MetaTraderChartClassification() {
+        val item = dummyMediaItem(name = "chart_screenshot.png")
+        val ocr = OcrTextEntity(mediaId = 1L, extractedText = "MetaTrader 5 EURUSD H4 Stop Loss Take Profit Buy Limit")
         val categories = CategoryClassifier.classifyMediaItem(mediaItem = item, ocrText = ocr)
 
         assertTrue("MetaTrader chart should be classified as TRADING", categories.contains(CategoryClassifier.CATEGORY_TRADING))
     }
 
     @Test
-    fun test3_CandlestickChartWithIndicators() {
-        val item = dummyMediaItem(name = "candlestick_chart.png")
-        val classifications = listOf(ImageClassificationEntity(mediaId = 1L, classId = 1, label = "candlestick chart", category = "financial chart", confidence = 0.95f))
-        val ocr = OcrTextEntity(mediaId = 1L, extractedText = "RSI Moving Average Support Resistance")
+    fun test3_CandlestickVisualClassification() {
+        val item = dummyMediaItem(name = "market_overview.jpg")
+        val classifications = listOf(
+            ImageClassificationEntity(mediaId = 1L, classId = 1, label = "candlestick chart", category = "chart", confidence = 0.95f)
+        )
+        val ocr = OcrTextEntity(mediaId = 1L, extractedText = "Support and resistance breakout entry point target")
         val categories = CategoryClassifier.classifyMediaItem(mediaItem = item, classifications = classifications, ocrText = ocr)
 
         assertTrue("Candlestick chart with indicators should be classified as TRADING", categories.contains(CategoryClassifier.CATEGORY_TRADING))
     }
 
     @Test
-    fun test4_CryptoTradingScreenshot() {
-        val item = dummyMediaItem(path = "/storage/emulated/0/Pictures/Screenshots/Screenshot_Binance_Crypto.png", name = "Screenshot_Binance_Crypto.png")
-        val ocr = OcrTextEntity(mediaId = 1L, extractedText = "Binance Crypto P&L +125% Futures Leverage 20x BTC/USDT")
+    fun test4_CryptoScreenshotMultiCategory() {
+        val item = dummyMediaItem(path = "/storage/emulated/0/Pictures/Screenshots/Screenshot_Binance.png", name = "Screenshot_Binance.png")
+        val ocr = OcrTextEntity(mediaId = 1L, extractedText = "Binance Futures Position Long ETHUSDT Leverage 10x")
         val categories = CategoryClassifier.classifyMediaItem(mediaItem = item, ocrText = ocr)
 
         assertTrue("Crypto trading screenshot should be classified as TRADING", categories.contains(CategoryClassifier.CATEGORY_TRADING))
@@ -69,18 +71,18 @@ class CategoryClassifierTest {
     }
 
     @Test
-    fun test5_ForexChart() {
-        val item = dummyMediaItem(name = "forex_xauusd.jpg")
-        val ocr = OcrTextEntity(mediaId = 1L, extractedText = "تداول فوركس XAU/USD تحليل السوق نقطة الدخول جني الأرباح")
+    fun test5_ArabicForexTextClassification() {
+        val item = dummyMediaItem(name = "analysis_arabic.jpg")
+        val ocr = OcrTextEntity(mediaId = 1L, extractedText = "تداول العملات الفوركس تحليل فني لزوج الذهب مقابل الدولار وقف الخسارة")
         val categories = CategoryClassifier.classifyMediaItem(mediaItem = item, ocrText = ocr)
 
         assertTrue("Forex chart should be classified as TRADING", categories.contains(CategoryClassifier.CATEGORY_TRADING))
     }
 
     @Test
-    fun test6_NormalBankReceiptContainingBuy() {
-        val item = dummyMediaItem(name = "bank_receipt.jpg")
-        val ocr = OcrTextEntity(mediaId = 1L, extractedText = "إيصال تم تحويل المبلغ شراء بقيمة 500 ريال بنك الراجحي")
+    fun test6_ShoppingReceiptNotTrading() {
+        val item = dummyMediaItem(name = "supermarket_receipt.jpg")
+        val ocr = OcrTextEntity(mediaId = 1L, extractedText = "فاتورة شراء سوبر ماركت كارفور تم شراء حليب وخبز السعر الإجمالي 150 جنيه")
         val categories = CategoryClassifier.classifyMediaItem(mediaItem = item, ocrText = ocr)
 
         assertFalse("Normal bank receipt containing 'شراء' must NOT be classified as TRADING", categories.contains(CategoryClassifier.CATEGORY_TRADING))
@@ -88,9 +90,9 @@ class CategoryClassifierTest {
     }
 
     @Test
-    fun test7_NormalShoppingScreenshot() {
+    fun test7_ECommerceProductNotTrading() {
         val item = dummyMediaItem(path = "/storage/emulated/0/Pictures/Screenshots/Screenshot_Amazon.png", name = "Screenshot_Amazon.png")
-        val ocr = OcrTextEntity(mediaId = 1L, extractedText = "سلة المشتريات اطلب الآن توصيل مجاني السعر 150 ريال")
+        val ocr = OcrTextEntity(mediaId = 1L, extractedText = "Amazon Order Summary Buy Now Wireless Headphones Price 50 USD")
         val categories = CategoryClassifier.classifyMediaItem(mediaItem = item, ocrText = ocr)
 
         assertFalse("Normal shopping screenshot must NOT be classified as TRADING", categories.contains(CategoryClassifier.CATEGORY_TRADING))
@@ -98,11 +100,15 @@ class CategoryClassifierTest {
     }
 
     @Test
-    fun test8_PersonViewingTradingChart() {
-        val item = dummyMediaItem(name = "person_chart.jpg")
-        val faces = listOf(DetectedFaceEntity(id = 1L, mediaId = 1L, left = 0f, top = 0f, right = 100f, bottom = 100f, confidence = 0.98f))
-        val classifications = listOf(ImageClassificationEntity(mediaId = 1L, classId = 1, label = "person", category = "human", confidence = 0.95f))
-        val ocr = OcrTextEntity(mediaId = 1L, extractedText = "TradingView BTC/USD Chart Analysis")
+    fun test8_PersonWithTradingChart() {
+        val item = dummyMediaItem(name = "trader_working.jpg")
+        val classifications = listOf(
+            ImageClassificationEntity(mediaId = 1L, classId = 1, label = "financial chart", category = "chart", confidence = 0.90f)
+        )
+        val faces = listOf(
+            DetectedFaceEntity(id = 1L, mediaId = 1L, left = 10f, top = 10f, right = 50f, bottom = 50f, confidence = 0.98f)
+        )
+        val ocr = OcrTextEntity(mediaId = 1L, extractedText = "Bitcoin bull market analysis")
         val categories = CategoryClassifier.classifyMediaItem(mediaItem = item, classifications = classifications, faces = faces, ocrText = ocr)
 
         assertTrue("Person viewing trading chart should be TRADING", categories.contains(CategoryClassifier.CATEGORY_TRADING))
@@ -110,11 +116,15 @@ class CategoryClassifierTest {
     }
 
     @Test
-    fun test9_ProductImageUnrelatedToTrading() {
-        val item = dummyMediaItem(name = "running_shoes.jpg")
-        val objects = listOf(DetectedObjectEntity(id = 1L, mediaId = 1L, classId = 1, labelName = "shoe", score = 0.9f, left = 0f, top = 0f, right = 50f, bottom = 50f))
-        val classifications = listOf(ImageClassificationEntity(mediaId = 1L, classId = 2, label = "footwear", category = "product", confidence = 0.92f))
-        val ocr = OcrTextEntity(mediaId = 1L, extractedText = "Nike Running Shoes Air Max Red Size 42")
+    fun test9_UnrelatedProductImageNotTrading() {
+        val item = dummyMediaItem(name = "perfume_bottle.jpg")
+        val classifications = listOf(
+            ImageClassificationEntity(mediaId = 1L, classId = 1, label = "perfume bottle", category = "cosmetics", confidence = 0.95f)
+        )
+        val objects = listOf(
+            DetectedObjectEntity(id = 1L, mediaId = 1L, classId = 1, labelName = "bottle", score = 0.92f, left = 0f, top = 0f, right = 100f, bottom = 100f)
+        )
+        val ocr = OcrTextEntity(mediaId = 1L, extractedText = "Eau De Parfum 100ml Special Offer")
         val categories = CategoryClassifier.classifyMediaItem(mediaItem = item, classifications = classifications, objects = objects, ocrText = ocr)
 
         assertFalse("Unrelated product must NOT be classified as TRADING", categories.contains(CategoryClassifier.CATEGORY_TRADING))
