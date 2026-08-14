@@ -122,4 +122,76 @@ class MediaRepositoryTest {
         assertEquals(1, results.size)
         assertEquals("vacation_beach.jpg", results[0].fileName)
     }
+
+    @Test
+    fun `test product smart folder returns only images classified as PRODUCT`() = runBlocking {
+        // Item 1: Real product (watch)
+        val productItem = MediaItem(
+            id = 4001L,
+            uriString = "content://media/external/images/media/4001",
+            filePath = "/sdcard/Pictures/luxury_watch.jpg",
+            fileName = "luxury_watch.jpg",
+            mimeType = "image/jpeg",
+            isVideo = false,
+            width = 1080,
+            height = 1080,
+            sizeBytes = 1500000L,
+            dateTaken = 3000L,
+            dateModified = 3000L
+        )
+
+        // Item 2: Person photo
+        val personItem = MediaItem(
+            id = 4002L,
+            uriString = "content://media/external/images/media/4002",
+            filePath = "/sdcard/Pictures/family_photo.jpg",
+            fileName = "family_photo.jpg",
+            mimeType = "image/jpeg",
+            isVideo = false,
+            width = 1080,
+            height = 1080,
+            sizeBytes = 1500000L,
+            dateTaken = 3001L,
+            dateModified = 3001L
+        )
+
+        // Item 3: Medical receipt document
+        val docItem = MediaItem(
+            id = 4003L,
+            uriString = "content://media/external/images/media/4003",
+            filePath = "/sdcard/Pictures/hospital_receipt.jpg",
+            fileName = "hospital_receipt.jpg",
+            mimeType = "image/jpeg",
+            isVideo = false,
+            width = 1080,
+            height = 1080,
+            sizeBytes = 800000L,
+            dateTaken = 3002L,
+            dateModified = 3002L
+        )
+
+        repository.insertMediaItems(listOf(productItem, personItem, docItem))
+
+        // Set up classifications
+        val categoryDao = db.categoryDao()
+        categoryDao.insertCrossRef(com.omex.gallery.core.data.local.MediaItemCategoryCrossRef(mediaId = 4001L, categoryId = "PRODUCT"))
+        categoryDao.insertCrossRef(com.omex.gallery.core.data.local.MediaItemCategoryCrossRef(mediaId = 4002L, categoryId = "PERSON"))
+        categoryDao.insertCrossRef(com.omex.gallery.core.data.local.MediaItemCategoryCrossRef(mediaId = 4003L, categoryId = "DOCUMENT"))
+
+        // Query Products smart folder
+        val productCategoryMedia = repository.getMediaForCategories(listOf("PRODUCT")).first()
+        assertEquals(1, productCategoryMedia.size)
+        assertEquals(4001L, productCategoryMedia[0].id)
+        assertEquals("luxury_watch.jpg", productCategoryMedia[0].fileName)
+
+        // Query Person smart folder
+        val personCategoryMedia = repository.getMediaForCategories(listOf("PERSON")).first()
+        assertEquals(1, personCategoryMedia.size)
+        assertEquals(4002L, personCategoryMedia[0].id)
+
+        // Query Document smart folder
+        val docCategoryMedia = repository.getMediaForCategories(listOf("DOCUMENT")).first()
+        assertEquals(1, docCategoryMedia.size)
+        assertEquals(4003L, docCategoryMedia[0].id)
+    }
 }
