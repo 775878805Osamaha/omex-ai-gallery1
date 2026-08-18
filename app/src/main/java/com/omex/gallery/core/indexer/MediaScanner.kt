@@ -62,13 +62,19 @@ class MediaScanner(private val context: Context) {
         val rawItems = mutableListOf<RawMediaItem>()
         val imgStats = scanImages(rawItems)
         val vidStats = scanVideos(rawItems)
-        rawItems.sortByDescending { it.dateTaken }
+        
+        // Strict deduplication to prevent duplicate records and ensure unique media counts
+        val deduplicated = rawItems
+            .distinctBy { it.id }
+            .distinctBy { if (it.filePath.isNotEmpty()) it.filePath else it.contentUri.toString() }
+            .sortedByDescending { it.dateTaken }
+
         DiagnosticScanData(
             imagesCursorCount = imgStats.cursorCount,
             imagesParsedCount = imgStats.parsedCount,
             videosCursorCount = vidStats.cursorCount,
             videosParsedCount = vidStats.parsedCount,
-            rawItems = rawItems
+            rawItems = deduplicated
         )
     }
 

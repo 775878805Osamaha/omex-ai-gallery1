@@ -6,6 +6,7 @@ import android.graphics.BitmapFactory
 import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.os.Build
+import android.util.LruCache
 import android.util.Size
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -14,7 +15,7 @@ import java.io.FileOutputStream
 import java.io.InputStream
 
 /**
- * Fast disk-backed thumbnail engine for images and video frame keyframes.
+ * Fast disk-backed and memory-indexed thumbnail engine for images and video frame keyframes.
  */
 class ThumbnailGenerator(private val context: Context) {
 
@@ -24,23 +25,33 @@ class ThumbnailGenerator(private val context: Context) {
         }
     }
 
+    // In-memory LRU cache of existing thumbnail paths to avoid disk I/O checks during rapid scrolling
+    private val pathCache = LruCache<Long, String>(2048)
+
     /**
      * Returns file path of cached thumbnail, generating it if absent.
      *
      * @param mediaId Unique media ID
      * @param contentUri Content URI of media item
      * @param isVideo True if item is a video
-     * @param targetDimension Max target width/height in pixels (default 512px)
+     * @param targetDimension Max target width/height in pixels (default 360px)
      */
     suspend fun getOrCreateThumbnail(
         mediaId: Long,
         contentUri: Uri,
         isVideo: Boolean,
-        targetDimension: Int = 512
+        targetDimension: Int = 360
     ): String = withContext(Dispatchers.IO) {
+        val cachedPath = pathCache.get(mediaId)
+        if (cachedPath != null && cachedPath.isNotEmpty()) {
+            return@withContext cachedPath
+        }
+
         val destFile = File(thumbnailDir, "thumb_$mediaId.jpg")
         if (destFile.exists() && destFile.length() > 0) {
-            return@withContext destFile.absolutePath
+            val path = destFile.absolutePath
+            pathCache.put(mediaId, path)
+            return@withContext path
         }
 
         val bitmap = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -61,9 +72,11 @@ class ThumbnailGenerator(private val context: Context) {
 
         try {
             FileOutputStream(destFile).use { outStream ->
-                bitmap.compress(Bitmap.CompressFormat.JPEG, 85, outStream)
+                bitmap.compress(Bitmap.CompressFormat.JPEG, 80, outStream)
             }
-            destFile.absolutePath
+            val path = destFile.absolutePath
+            pathCache.put(mediaId, path)
+            path
         } catch (e: Exception) {
             ""
         } finally {
@@ -107,7 +120,7 @@ class ThumbnailGenerator(private val context: Context) {
                 inputStream = context.contentResolver.openInputStream(contentUri)
                 val decodeOptions = BitmapFactory.Options().apply {
                     inSampleSize = sampleSize
-                    inPreferredConfig = Bitmap.Config.ARGB_8888
+                    inPreferredConfig = Bitmap.Config.RGB_565 // 50% memory reduction compared to ARGB_8888
                 }
                 BitmapFactory.decodeStream(inputStream, null, decodeOptions)
             } catch (e: Exception) {

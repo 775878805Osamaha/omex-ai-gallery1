@@ -738,7 +738,7 @@ fun GalleryScreen(
                     ) {
                         MediaFilterTab.entries.forEach { tab ->
                             val isSelected = selectedTab == tab
-                            item {
+                            item(key = "tab_${tab.name}") {
                                 FilterChip(
                                     selected = isSelected,
                                     onClick = { viewModel.selectTab(tab) },
@@ -898,7 +898,7 @@ fun GalleryScreen(
                             modifier = Modifier.fillMaxSize().testTag("gallery_media_grid")
                         ) {
                             grouped.forEach { (dateHeader, items) ->
-                                item(span = { GridItemSpan(columnCount) }) {
+                                item(key = "date_header_$dateHeader", span = { GridItemSpan(columnCount) }) {
                                     Text(
                                         text = dateHeader,
                                         color = CyanAccent,
@@ -1197,11 +1197,16 @@ fun MediaGridTile(
             )
             .testTag("media_item_${item.id}")
     ) {
-        AsyncImage(
-            model = ImageRequest.Builder(LocalContext.current)
-                .data(item.uriString)
+        val context = LocalContext.current
+        val imageModel = remember(item.id, item.thumbnailPath, item.uriString) {
+            ImageRequest.Builder(context)
+                .data(if (!item.thumbnailPath.isNullOrEmpty()) item.thumbnailPath else item.uriString)
+                .size(360, 360)
                 .crossfade(true)
-                .build(),
+                .build()
+        }
+        AsyncImage(
+            model = imageModel,
             contentDescription = item.fileName,
             contentScale = ContentScale.Crop,
             modifier = Modifier.fillMaxSize()
@@ -1374,11 +1379,21 @@ fun AlbumCardTile(
     }
 }
 
+private val arabicDateFormatter = SimpleDateFormat("EEEE, d MMMM yyyy", Locale("ar"))
+private val globalDateHeaderCache = android.util.LruCache<Long, String>(1024)
+
 private fun groupMediaByDate(items: List<MediaItem>): Map<String, List<MediaItem>> {
-    val sdf = SimpleDateFormat("EEEE, d MMMM yyyy", Locale("ar"))
     return items.groupBy { item ->
         if (item.dateTaken > 0) {
-            sdf.format(Date(item.dateTaken))
+            val dayKey = item.dateTaken / (24 * 60 * 60 * 1000L)
+            var formatted = globalDateHeaderCache.get(dayKey)
+            if (formatted == null) {
+                formatted = synchronized(arabicDateFormatter) {
+                    arabicDateFormatter.format(Date(item.dateTaken))
+                }
+                globalDateHeaderCache.put(dayKey, formatted)
+            }
+            formatted
         } else {
             "وسائط غير مؤرخة"
         }

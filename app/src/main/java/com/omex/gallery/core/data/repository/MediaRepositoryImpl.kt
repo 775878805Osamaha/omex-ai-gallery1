@@ -37,6 +37,7 @@ import com.omex.gallery.core.ai.duplicates.DuplicateDetector
 import com.omex.gallery.core.ai.faces.FaceClusterEngine
 import com.omex.gallery.core.ai.pipeline.AiPipelineExecutor
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.flow.flowOn
 import kotlin.coroutines.coroutineContext
 import com.omex.gallery.core.ai.superresolution.DefaultImageSuperResolver
 import com.omex.gallery.core.ai.superresolution.SuperResolutionConfig
@@ -457,9 +458,17 @@ class MediaRepositoryImpl(
 
     override fun getDuplicateGroups(): Flow<List<DuplicateGroupWithMedia>> = flow {
         aiDao.getAllDuplicateGroups().collect { groups ->
+            val allMemberEntities = groups.flatMap { aiDao.getMembersForDuplicateGroup(it.groupId) }
+            val mediaIds = allMemberEntities.map { it.mediaId }.distinct()
+            val mediaMap = if (mediaIds.isNotEmpty()) {
+                mediaDao.getMediaByIds(mediaIds).associate { it.id to it.toDomain() }
+            } else {
+                emptyMap()
+            }
+
             val result = groups.map { group ->
                 val members = aiDao.getMembersForDuplicateGroup(group.groupId).mapNotNull { member ->
-                    val media = getMediaById(member.mediaId)
+                    val media = mediaMap[member.mediaId]
                     if (media != null) DuplicateMemberWithMedia(media, member.similarityScore) else null
                 }
                 DuplicateGroupWithMedia(
@@ -470,13 +479,21 @@ class MediaRepositoryImpl(
             }
             emit(result)
         }
-    }
+    }.flowOn(Dispatchers.IO)
 
     override fun getPersonGroups(): Flow<List<PersonGroup>> = flow {
         aiDao.getAllPersonClusterIds().collect { clusterIds ->
+            val clusterToMediaIds = clusterIds.associateWith { aiDao.getMediaIdsForPersonCluster(it) }
+            val allMediaIds = clusterToMediaIds.values.flatten().distinct()
+            val mediaMap = if (allMediaIds.isNotEmpty()) {
+                mediaDao.getMediaByIds(allMediaIds).associate { it.id to it.toDomain() }
+            } else {
+                emptyMap()
+            }
+
             val groups = clusterIds.map { clusterId ->
-                val mediaIds = aiDao.getMediaIdsForPersonCluster(clusterId)
-                val mediaItems = mediaIds.mapNotNull { getMediaById(it) }
+                val mediaIds = clusterToMediaIds[clusterId] ?: emptyList()
+                val mediaItems = mediaIds.mapNotNull { mediaMap[it] }
                 PersonGroup(
                     clusterId = clusterId,
                     personName = "Person ${clusterId.removePrefix("person_cluster_")}",
@@ -486,7 +503,7 @@ class MediaRepositoryImpl(
             }
             emit(groups)
         }
-    }
+    }.flowOn(Dispatchers.IO)
 
     override suspend fun getPersonMediaItems(clusterId: String): List<MediaItem> = withContext(Dispatchers.IO) {
         val ids = aiDao.getMediaIdsForPersonCluster(clusterId)
@@ -664,33 +681,51 @@ class MediaRepositoryImpl(
 
     override suspend fun classifyUnclassifiedMedia(context: Context): Result<Int> = withContext(Dispatchers.IO) {
         try {
+            ensureDefaultCategories()
             val allMedia = mediaDao.getAllMediaList()
+            if (allMedia.isEmpty()) return@withContext Result.success(0)
+
+            // Batch fetch all AI annotations in memory to avoid O(N) database queries
+            val allCrossRefs = categoryDao.getAllCrossRefs()
+            val existingMediaMap = allCrossRefs.groupBy { it.mediaId }.mapValues { entry -> entry.value.map { it.categoryId }.toSet() }
+
+            val allClassifications = aiDao.getAllClassifications().groupBy { it.mediaId }
+            val allObjects = aiDao.getAllObjects().groupBy { it.mediaId }
+            val allOcr = aiDao.getAllOcrResults().associateBy { it.mediaId }
+
+            val crossRefsToInsert = mutableListOf<com.omex.gallery.core.data.local.MediaItemCategoryCrossRef>()
             var classifiedCount = 0
 
             allMedia.forEach { itemEntity ->
-                val existingCategories = categoryDao.getCategoriesForMedia(itemEntity.id)
-                if (existingCategories.isEmpty()) {
-                    val classifications = aiDao.getClassificationsForMedia(itemEntity.id)
-                    val objects = aiDao.getObjectsForMedia(itemEntity.id)
-                    val faces = aiDao.getFacesForMedia(itemEntity.id)
-                    val ocr = aiDao.getOcrForMedia(itemEntity.id)
+                val existingCategories = existingMediaMap[itemEntity.id] ?: emptySet()
+                if (existingCategories.isEmpty() || existingCategories == setOf("OTHER")) {
+                    val classifications = allClassifications[itemEntity.id] ?: emptyList()
+                    val objects = allObjects[itemEntity.id] ?: emptyList()
+                    val ocr = allOcr[itemEntity.id]
 
                     val categories = com.omex.gallery.core.ai.classifier.CategoryClassifier.classifyMediaItem(
                         mediaItem = itemEntity,
                         classifications = classifications,
                         objects = objects,
-                        faces = faces,
+                        faces = emptyList(),
                         ocrText = ocr
                     )
 
-                    val crossRefs = categories.map { catId ->
-                        com.omex.gallery.core.data.local.MediaItemCategoryCrossRef(
-                            mediaId = itemEntity.id,
-                            categoryId = catId
+                    categories.forEach { catId ->
+                        crossRefsToInsert.add(
+                            com.omex.gallery.core.data.local.MediaItemCategoryCrossRef(
+                                mediaId = itemEntity.id,
+                                categoryId = catId
+                            )
                         )
                     }
-                    categoryDao.insertCrossRefs(crossRefs)
                     classifiedCount++
+                }
+            }
+
+            if (crossRefsToInsert.isNotEmpty()) {
+                crossRefsToInsert.chunked(500).forEach { chunk ->
+                    categoryDao.insertCrossRefs(chunk)
                 }
             }
 

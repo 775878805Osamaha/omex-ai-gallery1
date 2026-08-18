@@ -82,7 +82,10 @@ class MediaIndexer(
                 for (raw in chunk) {
                     coroutineContext.ensureActive() // Check for cancellation
 
-                    progressTracker.updateProgress(processedCount, raw.displayName)
+                    if (processedCount % 10 == 0) {
+                        progressTracker.updateProgress(processedCount, raw.displayName)
+                        kotlinx.coroutines.yield()
+                    }
 
                     // Extract EXIF / video metadata
                     val exif = if (!raw.isVideo) {

@@ -42,9 +42,12 @@ class AiPipelineExecutor(
     private val ocrEngine: OcrEngine = MlKitOcrEngine(context)
 ) {
 
-    suspend fun processMediaItem(mediaItem: MediaItem): Result<Boolean> = withContext(Dispatchers.IO) {
+    suspend fun processMediaItem(mediaItem: MediaItem, forceReanalysis: Boolean = false): Result<Boolean> = withContext(Dispatchers.IO) {
         try {
             if (mediaItem.isVideo) return@withContext Result.success(true)
+            if (!forceReanalysis && mediaItem.isAiProcessed) {
+                return@withContext Result.success(true)
+            }
 
             val uri = Uri.parse(mediaItem.uriString)
             val bitmap = loadBitmap(context, uri) ?: return@withContext Result.failure(Exception("Failed to decode bitmap"))

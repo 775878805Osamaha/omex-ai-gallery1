@@ -25,7 +25,9 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -408,8 +410,17 @@ class GalleryViewModel(
         // Directory folder buckets
         val folderGroups = mediaList.groupBy { item ->
             if (item.filePath.isNotEmpty()) {
-                val parent = File(item.filePath).parentFile
-                parent?.name ?: "وسائط أخرى"
+                val lastSlash = item.filePath.lastIndexOf('/')
+                if (lastSlash > 0) {
+                    val prevSlash = item.filePath.lastIndexOf('/', lastSlash - 1)
+                    if (prevSlash >= 0) {
+                        item.filePath.substring(prevSlash + 1, lastSlash)
+                    } else {
+                        item.filePath.substring(0, lastSlash)
+                    }
+                } else {
+                    "وسائط أخرى"
+                }
             } else {
                 "وسائط أخرى"
             }
@@ -451,9 +462,15 @@ class GalleryViewModel(
         _selectedAlbum,
         _sortOrder,
         _selectedCategoryIds
-    ) { tab, filterState, album, sortOrder, categoryIds ->
+    ) { tab: MediaFilterTab, filterState: SearchFilterState, album: Album?, sortOrder: SortOrder, categoryIds: Set<String> ->
         Tuple5(tab, filterState, album, sortOrder, categoryIds)
-    }.flatMapLatest { (tab, filterState, album, sortOrder, categoryIds) ->
+    }.distinctUntilChanged()
+    .flatMapLatest { tuple: Tuple5<MediaFilterTab, SearchFilterState, Album?, SortOrder, Set<String>> ->
+        val tab = tuple.a
+        val filterState = tuple.b
+        val album = tuple.c
+        val sortOrder = tuple.d
+        val categoryIds = tuple.e
         val mergedCategories = (filterState.allSelectedCategories + categoryIds).toSet()
         val effectiveTabIsVideo = when (tab) {
             MediaFilterTab.PHOTOS -> false
@@ -506,7 +523,14 @@ class GalleryViewModel(
                     AlbumType.FAVORITES -> filtered.filter { it.isFavorite }
                     AlbumType.FOLDER -> {
                         val folderName = album.folderPath ?: ""
-                        filtered.filter { File(it.filePath).parentFile?.name == folderName }
+                        filtered.filter { item ->
+                            val lastSlash = item.filePath.lastIndexOf('/')
+                            val parentName = if (lastSlash > 0) {
+                                val prevSlash = item.filePath.lastIndexOf('/', lastSlash - 1)
+                                if (prevSlash >= 0) item.filePath.substring(prevSlash + 1, lastSlash) else item.filePath.substring(0, lastSlash)
+                            } else ""
+                            parentName == folderName
+                        }
                     }
                     AlbumType.THEMED_AI -> {
                         if (album.matchingMediaIds.isNotEmpty()) {
@@ -526,7 +550,7 @@ class GalleryViewModel(
                 SortOrder.LARGEST_FIRST -> filtered.sortedByDescending { it.sizeBytes }
                 SortOrder.SMALLEST_FIRST -> filtered.sortedBy { it.sizeBytes }
             }
-        }
+        }.flowOn(kotlinx.coroutines.Dispatchers.Default)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val duplicateGroups: StateFlow<List<DuplicateGroupWithMedia>> = repository.getDuplicateGroups()

@@ -204,17 +204,19 @@ object CategoryClassifier {
         // 10. PRODUCT Detection (Visual & Physical Evidence Priority)
         // Strict physical merchandise labels - excludes generic human attire (clothing, shirt, pants, dress)
         val specificPhysicalProductLabels = listOf(
-            "shoe", "sneaker", "boot", "sandal", "footwear",
-            "bottle", "package", "packaging", "perfume", "cosmetics", "lotion", "shampoo", "lipstick",
-            "smartphone", "cellphone", "mobile phone", "smartwatch", "wristwatch", "watch",
-            "headphones", "earphones", "headset", "camera", "gadget", "tablet",
-            "toy", "furniture", "appliance", "handbag", "backpack", "wallet", "sunglasses",
-            "merchandise", "retail product", "consumer product",
-            "منتج", "سلعة", "بضاعة"
+            "shoe", "sneaker", "boot", "sandal", "footwear", "heel",
+            "bottle", "package", "packaging", "perfume", "cosmetics", "lotion", "shampoo", "lipstick", "makeup",
+            "smartphone", "cellphone", "mobile phone", "phone", "iphone", "samsung", "ipad", "smartwatch", "wristwatch", "watch",
+            "headphones", "earphones", "headset", "earbuds", "speaker", "camera", "gadget", "tablet", "laptop", "computer",
+            "keyboard", "mouse", "toy", "furniture", "chair", "table", "couch", "sofa", "bed", "appliance", "television", "tv",
+            "handbag", "backpack", "wallet", "purse", "sunglasses", "glasses", "jewelry", "ring", "necklace", "earring", "bracelet",
+            "cup", "mug", "merchandise", "retail product", "consumer product", "item", "goods", "box",
+            "منتج", "منتجات", "سلعة", "بضاعة", "مقتنيات", "عطر", "حذاء", "حقيبة", "ساعة", "نظارة", "هاتف", "جوال"
         )
 
         val generalProductCategoryLabels = listOf(
-            "product", "merchandise", "retail", "consumer goods", "منتج", "سلعة", "بضاعة"
+            "product", "merchandise", "retail", "consumer goods", "goods", "item", "shopping",
+            "منتج", "سلعة", "بضاعة", "منتجات"
         )
 
         // Visual Evidence 1: Specific physical product detected as an object
@@ -237,19 +239,32 @@ object CategoryClassifier {
             )
         }
 
-        // Visual Evidence 3: Explicit product file path / name
-        val hasProductFileName = (pathLower.contains("product") || nameLower.contains("product") ||
-            pathLower.contains("merchandise") || nameLower.contains("merchandise") ||
-            pathLower.contains("منتج") || nameLower.contains("سلعة") || nameLower.contains("بضاعة")) &&
-            !isScreenshot
+        // Visual Evidence 3: Explicit product file path / name / folder
+        val productPathKeywords = listOf(
+            "product", "products", "item", "items", "merchandise", "goods", "shop", "store",
+            "ecommerce", "amazon", "noon", "jumia", "aliexpress", "ebay", "market",
+            "منتج", "منتجات", "سلعة", "بضاعة", "مبيعات", "متجر", "تسوق"
+        )
+        val hasProductFileName = productPathKeywords.any { pathLower.contains(it) || nameLower.contains(it) } && !isScreenshot
 
-        val hasVisualProductEvidence = hasDetectedPhysicalObject || hasClassifiedPhysicalProduct || hasProductFileName
+        // Evidence 4: Strong product keywords in OCR text (e.g. price tags, discount, buy now)
+        val productOcrKeywords = listOf(
+            "price:", "price :", "egp", "sar", "aed", "السعر", "سعر", "جنيه", "ريال", "درهم",
+            "discount", "offer", "sale", "order now", "buy now", "add to cart",
+            "خصم", "عروض", "عرض", "تخفيض", "تخفيضات", "اطلب الان", "شراء"
+        )
+        val hasProductOcr = !isDocument && productOcrKeywords.any { textLower.contains(it) }
+
+        val hasVisualProductEvidence = hasDetectedPhysicalObject || hasClassifiedPhysicalProduct || hasProductFileName || hasProductOcr
 
         // Documents, medical papers, receipts, handwritten notes, and trading charts must NOT be PRODUCT
         // unless an actual distinct physical product object is visually detected.
         val isPureDocumentOrNote = isDocument && !hasDetectedPhysicalObject && !hasProductFileName
 
-        if (hasVisualProductEvidence && !isTrading && !isPureDocumentOrNote) {
+        // If it's a person portrait without standalone physical product evidence, do not classify as PRODUCT
+        val isPersonPortrait = hasPerson && !hasDetectedPhysicalObject && !hasProductFileName
+
+        if (hasVisualProductEvidence && !isTrading && !isPureDocumentOrNote && !isPersonPortrait) {
             categories.add(CATEGORY_PRODUCT)
         }
 
