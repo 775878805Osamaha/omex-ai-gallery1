@@ -11,9 +11,11 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -26,6 +28,8 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import com.omex.gallery.ui.feature_gallery.components.ActiveFiltersRow
+import com.omex.gallery.ui.feature_gallery.components.AdvancedFilterBottomSheet
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -70,6 +74,7 @@ import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PhotoLibrary
+import androidx.compose.material.icons.filled.PieChart
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
@@ -77,6 +82,7 @@ import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Sort
 import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Button
@@ -99,6 +105,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
@@ -177,7 +184,8 @@ fun GalleryScreen(
     onMediaClick: (Long) -> Unit,
     onOpenIndexingStatus: () -> Unit,
     onOpenSearch: () -> Unit = {},
-    onOpenAiChat: () -> Unit = {}
+    onOpenAiChat: () -> Unit = {},
+    onOpenStorageAnalyzer: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val navTab by viewModel.selectedNavTab.collectAsStateWithLifecycle()
@@ -195,9 +203,12 @@ fun GalleryScreen(
     val selectedItemIds by viewModel.selectedItemIds.collectAsStateWithLifecycle()
     val selectedCategoryIds by viewModel.selectedCategoryIds.collectAsStateWithLifecycle()
     val categories by viewModel.categories.collectAsStateWithLifecycle()
+    val aiAlbumSuggestions by viewModel.aiAlbumSuggestions.collectAsStateWithLifecycle()
 
     var isFilterPanelExpanded by remember { mutableStateOf(false) }
     var isSortMenuExpanded by remember { mutableStateOf(false) }
+    var showBatchDeleteDialog by remember { mutableStateOf(false) }
+    var showAdvancedFiltersBottomSheet by remember { mutableStateOf(false) }
 
     val permissionsToRequest = remember {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
@@ -315,6 +326,18 @@ fun GalleryScreen(
                         )
                     }
 
+                    // Open Storage Analyzer
+                    IconButton(
+                        onClick = onOpenStorageAnalyzer,
+                        modifier = Modifier.testTag("open_storage_analyzer_button")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.PieChart,
+                            contentDescription = stringResource(R.string.storage_analyzer_title),
+                            tint = CyanAccent
+                        )
+                    }
+
                     if (navTab == NavTab.GALLERY) {
                         // Toggle Column Count
                         IconButton(
@@ -372,6 +395,31 @@ fun GalleryScreen(
                                         viewModel.setSortOrder(SortOrder.SMALLEST_FIRST)
                                         isSortMenuExpanded = false
                                     }
+                                )
+                            }
+                        }
+
+                        // Advanced Filters Button with Badge
+                        IconButton(
+                            onClick = { showAdvancedFiltersBottomSheet = true },
+                            modifier = Modifier.testTag("open_filters_button")
+                        ) {
+                            BadgedBox(
+                                badge = {
+                                    if (searchFilterState.hasActiveFilters) {
+                                        Badge(
+                                            containerColor = AmberAccent,
+                                            contentColor = ObsidianBg
+                                        ) {
+                                            Text("${searchFilterState.activeFilterCount}")
+                                        }
+                                    }
+                                }
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Tune,
+                                    contentDescription = stringResource(R.string.filters_title),
+                                    tint = if (searchFilterState.hasActiveFilters) AmberAccent else TextPrimaryDark
                                 )
                             }
                         }
@@ -478,37 +526,132 @@ fun GalleryScreen(
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
-            // Batch Selection Floating Toolbar
-            if (selectedItemIds.isNotEmpty()) {
+            // Batch Delete Confirmation Dialog
+            if (showBatchDeleteDialog) {
+                AlertDialog(
+                    onDismissRequest = { showBatchDeleteDialog = false },
+                    title = {
+                        Text(
+                            text = stringResource(R.string.batch_delete_dialog_title, selectedItemIds.size),
+                            fontWeight = FontWeight.Bold,
+                            color = TextPrimaryDark
+                        )
+                    },
+                    text = {
+                        Text(
+                            text = stringResource(R.string.batch_delete_dialog_msg),
+                            color = TextMutedDark,
+                            fontSize = 13.sp
+                        )
+                    },
+                    confirmButton = {
+                        Button(
+                            onClick = {
+                                viewModel.deleteSelected()
+                                showBatchDeleteDialog = false
+                            },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.error,
+                                contentColor = Color.White
+                            ),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.testTag("confirm_batch_delete_button")
+                        ) {
+                            Text(stringResource(R.string.delete_confirm), fontWeight = FontWeight.Bold)
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(
+                            onClick = { showBatchDeleteDialog = false },
+                            modifier = Modifier.testTag("cancel_batch_delete_button")
+                        ) {
+                            Text(stringResource(R.string.cancel), color = CyanAccent)
+                        }
+                    },
+                    containerColor = SurfaceDark,
+                    modifier = Modifier.testTag("batch_delete_dialog")
+                )
+            }
+
+            // Batch Selection Floating Toolbar / Action Bar
+            AnimatedVisibility(
+                visible = selectedItemIds.isNotEmpty(),
+                enter = fadeIn() + expandVertically(),
+                exit = fadeOut() + shrinkVertically()
+            ) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(AmberAccent.copy(alpha = 0.25f))
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                        .background(
+                            Brush.horizontalGradient(
+                                colors = listOf(
+                                    CyanAccent.copy(alpha = 0.2f),
+                                    AmberAccent.copy(alpha = 0.2f)
+                                )
+                            )
+                        )
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                        .testTag("selection_action_bar"),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        IconButton(onClick = { viewModel.clearSelection() }) {
-                            Icon(Icons.Default.Close, contentDescription = "Clear", tint = AmberAccent)
+                        IconButton(
+                            onClick = { viewModel.clearSelection() },
+                            modifier = Modifier.testTag("clear_selection_button")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = stringResource(R.string.clear),
+                                tint = TextPrimaryDark
+                            )
                         }
+                        Spacer(modifier = Modifier.width(4.dp))
                         Text(
-                            text = "${selectedItemIds.size} عنصر محدد",
+                            text = stringResource(R.string.selection_mode_title, selectedItemIds.size),
                             color = TextPrimaryDark,
                             fontWeight = FontWeight.Bold,
                             fontSize = 14.sp
                         )
                     }
 
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        IconButton(onClick = { viewModel.selectAll(mediaItems) }) {
-                            Icon(Icons.Default.SelectAll, contentDescription = "Select All", tint = CyanAccent)
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        val allSelected = mediaItems.isNotEmpty() && selectedItemIds.size >= mediaItems.size
+                        IconButton(
+                            onClick = {
+                                if (allSelected) {
+                                    viewModel.clearSelection()
+                                } else {
+                                    viewModel.selectAll(mediaItems)
+                                }
+                            },
+                            modifier = Modifier.testTag("select_all_button")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.SelectAll,
+                                contentDescription = stringResource(if (allSelected) R.string.deselect_all else R.string.select_all),
+                                tint = CyanAccent
+                            )
                         }
-                        IconButton(onClick = { viewModel.favoriteSelected() }) {
-                            Icon(Icons.Default.Favorite, contentDescription = "Favorite Selected", tint = AmberAccent)
+                        IconButton(
+                            onClick = { viewModel.favoriteSelected() },
+                            modifier = Modifier.testTag("favorite_selected_button")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Favorite,
+                                contentDescription = stringResource(R.string.favorite_selected),
+                                tint = AmberAccent
+                            )
                         }
-                        IconButton(onClick = { viewModel.deleteSelected() }) {
-                            Icon(Icons.Default.Delete, contentDescription = "Delete Selected", tint = Color.Red)
+                        IconButton(
+                            onClick = { showBatchDeleteDialog = true },
+                            modifier = Modifier.testTag("delete_selected_button")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Delete,
+                                contentDescription = stringResource(R.string.delete_selected),
+                                tint = MaterialTheme.colorScheme.error
+                            )
                         }
                     }
                 }
@@ -519,24 +662,72 @@ fun GalleryScreen(
                 NavTab.GALLERY -> {
                     // Selected Album Banner
                     if (selectedAlbum != null) {
-                        Row(
+                        val isThemedAi = selectedAlbum!!.albumType == AlbumType.THEMED_AI
+                        Card(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .background(SurfaceDark)
-                                .padding(horizontal = 16.dp, vertical = 6.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
+                                .padding(horizontal = 16.dp, vertical = 6.dp)
+                                .testTag("active_album_banner"),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = CardDefaults.cardColors(
+                                containerColor = if (isThemedAi) AmberAccent.copy(alpha = 0.15f) else SurfaceDark
+                            ),
+                            border = if (isThemedAi) {
+                                androidx.compose.foundation.BorderStroke(1.dp, AmberAccent.copy(alpha = 0.5f))
+                            } else null
                         ) {
-                            Text(
-                                text = "ألبوم: ${selectedAlbum!!.title} (${selectedAlbum!!.itemCount})",
-                                color = AmberAccent,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 13.sp
-                            )
-                            IconButton(onClick = { viewModel.selectAlbum(null) }) {
-                                Icon(Icons.Default.Close, contentDescription = "Clear Album", tint = TextMutedDark, modifier = Modifier.size(18.dp))
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Icon(
+                                        imageVector = if (isThemedAi) Icons.Default.AutoAwesome else Icons.Default.Folder,
+                                        contentDescription = null,
+                                        tint = if (isThemedAi) AmberAccent else CyanAccent,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Column {
+                                        Text(
+                                            text = if (isThemedAi) {
+                                                stringResource(R.string.ai_suggestions_active_banner, selectedAlbum!!.title, selectedAlbum!!.itemCount)
+                                            } else {
+                                                "ألبوم: ${selectedAlbum!!.title} (${selectedAlbum!!.itemCount})"
+                                            },
+                                            color = if (isThemedAi) AmberAccent else TextPrimaryDark,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 12.sp,
+                                            maxLines = 2,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+                                }
+                                IconButton(
+                                    onClick = { viewModel.selectAlbum(null) },
+                                    modifier = Modifier.testTag("clear_selected_album_button")
+                                ) {
+                                    Icon(Icons.Default.Close, contentDescription = "Clear Album", tint = TextMutedDark, modifier = Modifier.size(18.dp))
+                                }
                             }
                         }
+                    }
+
+                    // AI Album Suggestions Section (local ML tag based)
+                    if (selectedAlbum == null && aiAlbumSuggestions.isNotEmpty()) {
+                        AiSuggestionsSection(
+                            suggestions = aiAlbumSuggestions,
+                            onExploreSuggestion = { viewModel.selectSuggestionAsAlbum(it) },
+                            onSaveAsAlbum = { viewModel.createThemedAlbumFromSuggestion(it) },
+                            onDismissSuggestion = { viewModel.dismissSuggestion(it) },
+                            onCreateAllSuggestions = { viewModel.createAllSuggestedAlbums() }
+                        )
                     }
 
                     // Gallery Filter Chips Row
@@ -668,6 +859,20 @@ fun GalleryScreen(
                         }
                     }
 
+                    // Active Advanced Filters Row (Phase 2)
+                    ActiveFiltersRow(
+                        filterState = searchFilterState,
+                        categories = categories,
+                        onRemoveCategory = { viewModel.removeCategoryFilter(it) },
+                        onRemoveMediaType = { viewModel.removeMediaTypeFilter() },
+                        onRemoveFavorite = { viewModel.removeFavoriteFilter() },
+                        onRemoveDate = { viewModel.removeDateFilter() },
+                        onRemoveFileSize = { viewModel.removeFileSizeFilter() },
+                        onRemoveExtension = { viewModel.removeExtensionFilter(it) },
+                        onRemoveDimension = { viewModel.removeDimensionFilter() },
+                        onClearAll = { viewModel.clearAllAdvancedFilters() }
+                    )
+
                     if (!isMediaPermissionGranted) {
                         MediaPermissionStateCard(
                             permissionsState = permissionsState,
@@ -707,6 +912,7 @@ fun GalleryScreen(
                                     MediaGridTile(
                                         item = item,
                                         isSelected = isSelected,
+                                        isSelectionMode = selectedItemIds.isNotEmpty(),
                                         onClick = {
                                             if (selectedItemIds.isNotEmpty()) {
                                                 viewModel.toggleSelection(item.id)
@@ -736,8 +942,19 @@ fun GalleryScreen(
                                 style = MaterialTheme.typography.titleMedium,
                                 color = TextPrimaryDark,
                                 fontWeight = FontWeight.Bold,
-                                modifier = Modifier.padding(bottom = 12.dp)
+                                modifier = Modifier.padding(bottom = 8.dp)
                             )
+
+                            if (aiAlbumSuggestions.isNotEmpty()) {
+                                AiSuggestionsSection(
+                                    suggestions = aiAlbumSuggestions,
+                                    onExploreSuggestion = { viewModel.selectSuggestionAsAlbum(it) },
+                                    onSaveAsAlbum = { viewModel.createThemedAlbumFromSuggestion(it) },
+                                    onDismissSuggestion = { viewModel.dismissSuggestion(it) },
+                                    onCreateAllSuggestions = { viewModel.createAllSuggestedAlbums() },
+                                    modifier = Modifier.padding(bottom = 8.dp)
+                                )
+                            }
 
                             if (albums.isEmpty()) {
                                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -874,6 +1091,44 @@ fun GalleryScreen(
 
                         Spacer(modifier = Modifier.height(16.dp))
 
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = SurfaceCard),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onOpenStorageAnalyzer() }
+                                .testTag("ai_studio_storage_analyzer_card")
+                        ) {
+                            Row(modifier = Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Surface(
+                                    shape = CircleShape,
+                                    color = CyanAccent.copy(alpha = 0.15f),
+                                    modifier = Modifier.size(44.dp)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(Icons.Default.PieChart, contentDescription = null, tint = CyanAccent, modifier = Modifier.size(24.dp))
+                                    }
+                                }
+                                Spacer(modifier = Modifier.width(14.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = stringResource(R.string.storage_analyzer_title),
+                                        color = TextPrimaryDark,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 14.sp
+                                    )
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text(
+                                        text = stringResource(R.string.storage_analyzer_subtitle),
+                                        color = TextMutedDark,
+                                        fontSize = 11.sp
+                                    )
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
                         Text("الميزات المستقلية المخططة (المراحل القادمة)", color = TextPrimaryDark, fontWeight = FontWeight.Bold, fontSize = 14.sp)
                         Spacer(modifier = Modifier.height(8.dp))
 
@@ -902,13 +1157,27 @@ fun GalleryScreen(
                 }
             }
         }
+
+        if (showAdvancedFiltersBottomSheet) {
+            AdvancedFilterBottomSheet(
+                currentFilterState = searchFilterState,
+                categories = categories,
+                matchingCount = mediaItems.size,
+                onApplyFilters = { newState ->
+                    viewModel.setSearchFilterState(newState)
+                },
+                onDismiss = { showAdvancedFiltersBottomSheet = false }
+            )
+        }
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun MediaGridTile(
     item: MediaItem,
     isSelected: Boolean,
+    isSelectionMode: Boolean = false,
     onClick: () -> Unit,
     onLongClick: () -> Unit
 ) {
@@ -922,7 +1191,11 @@ fun MediaGridTile(
                 color = if (isSelected) CyanAccent else Color.Transparent,
                 shape = RoundedCornerShape(8.dp)
             )
-            .clickable { onClick() }
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = onLongClick
+            )
+            .testTag("media_item_${item.id}")
     ) {
         AsyncImage(
             model = ImageRequest.Builder(LocalContext.current)
@@ -950,7 +1223,7 @@ fun MediaGridTile(
             }
         }
 
-        if (item.isFavorite) {
+        if (item.isFavorite && !isSelected) {
             Icon(
                 imageVector = Icons.Default.Favorite,
                 contentDescription = null,
@@ -969,7 +1242,29 @@ fun MediaGridTile(
                     .background(CyanAccent.copy(alpha = 0.3f)),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(Icons.Default.CheckCircle, contentDescription = "Selected", tint = CyanAccent, modifier = Modifier.size(28.dp))
+                Icon(
+                    imageVector = Icons.Default.CheckCircle,
+                    contentDescription = "Selected",
+                    tint = CyanAccent,
+                    modifier = Modifier.size(28.dp).testTag("selected_check_${item.id}")
+                )
+            }
+        } else if (isSelectionMode) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(6.dp)
+                    .size(22.dp)
+                    .clip(CircleShape)
+                    .background(Color.Black.copy(alpha = 0.45f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.CheckCircleOutline,
+                    contentDescription = "Unselected",
+                    tint = Color.White.copy(alpha = 0.7f),
+                    modifier = Modifier.size(16.dp)
+                )
             }
         }
     }
@@ -980,12 +1275,16 @@ fun AlbumCardTile(
     album: Album,
     onClick: () -> Unit
 ) {
+    val isAiThemed = album.albumType == AlbumType.THEMED_AI
+
     Card(
         colors = CardDefaults.cardColors(containerColor = SurfaceCard),
         shape = RoundedCornerShape(12.dp),
+        border = if (isAiThemed) androidx.compose.foundation.BorderStroke(1.dp, AmberAccent.copy(alpha = 0.5f)) else null,
         modifier = Modifier
             .fillMaxWidth()
             .clickable { onClick() }
+            .testTag("album_card_${album.id}")
     ) {
         Column {
             Box(
@@ -1011,11 +1310,43 @@ fun AlbumCardTile(
                             AlbumType.VIDEOS -> Icons.Default.PlayArrow
                             AlbumType.FAVORITES -> Icons.Default.Favorite
                             AlbumType.FOLDER -> Icons.Default.Folder
+                            AlbumType.THEMED_AI -> Icons.Default.AutoAwesome
                         },
                         contentDescription = null,
-                        tint = CyanAccent,
+                        tint = if (isAiThemed) AmberAccent else CyanAccent,
                         modifier = Modifier.size(36.dp)
                     )
+                }
+
+                if (isAiThemed) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .padding(6.dp)
+                            .background(
+                                Brush.horizontalGradient(
+                                    listOf(AmberAccent, CyanAccent)
+                                ),
+                                RoundedCornerShape(6.dp)
+                            )
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.AutoAwesome,
+                                contentDescription = null,
+                                tint = ObsidianBg,
+                                modifier = Modifier.size(10.dp)
+                            )
+                            Spacer(modifier = Modifier.width(2.dp))
+                            Text(
+                                text = stringResource(R.string.ai_suggestions_album_badge),
+                                color = ObsidianBg,
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
                 }
 
                 Box(
@@ -1025,7 +1356,7 @@ fun AlbumCardTile(
                         .background(ObsidianBg.copy(alpha = 0.75f), RoundedCornerShape(12.dp))
                         .padding(horizontal = 6.dp, vertical = 2.dp)
                 ) {
-                    Text("${album.itemCount}", color = CyanAccent, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    Text("${album.itemCount}", color = if (isAiThemed) AmberAccent else CyanAccent, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                 }
             }
 

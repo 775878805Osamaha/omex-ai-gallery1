@@ -1,11 +1,13 @@
 package com.omex.gallery.core.ai.share
 
 import android.content.Context
+import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
 import android.util.Base64
 import com.omex.gallery.BuildConfig
+import com.omex.gallery.domain.model.MediaItem
 import com.omex.gallery.domain.model.MediaItemWithAi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -14,13 +16,20 @@ import org.json.JSONObject
 import java.io.ByteArrayOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
+import java.util.Locale
 
 object AiShareDescriptionGenerator {
 
-    private const val DEFAULT_SUFFIX = "للطلب والاستفسار تواصل معنا."
+    const val DEFAULT_SUFFIX = "للطلب والاستفسار التواصل معنا."
+    const val WHATSAPP_PACKAGE = "com.whatsapp"
 
+    /**
+     * Generates a customer-ready product description in Arabic.
+     * Uses Gemini Vision API if an API key is configured, otherwise falls back
+     * to verified on-device ML metadata synthesis without fabricating information.
+     */
     suspend fun generateProductDescription(
-        context: Context,
+        context: Context?,
         mediaItemWithAi: MediaItemWithAi
     ): String = withContext(Dispatchers.IO) {
         val apiKey = try {
@@ -29,16 +38,104 @@ object AiShareDescriptionGenerator {
             ""
         }
 
-        // Try Gemini API if API key is present
-        if (apiKey.isNotBlank() && apiKey != "MY_GEMINI_API_KEY") {
+        // Try Gemini API if API key is present and context is available
+        if (context != null && apiKey.isNotBlank() && apiKey != "MY_GEMINI_API_KEY") {
             val geminiResult = callGeminiVisionApi(context, mediaItemWithAi, apiKey)
             if (!geminiResult.isNullOrBlank()) {
                 return@withContext formatAndCleanDescription(geminiResult)
             }
         }
 
-        // Fallback: Smart local vision synthesis
+        // Fallback: Smart on-device metadata synthesis
         generateLocalProductDescription(mediaItemWithAi)
+    }
+
+    /**
+     * Local synthesis strictly based on detected objects, OCR text, and classifications.
+     * Guaranteed never to fabricate price, warranty, dimensions, material, or technical specs.
+     */
+    fun generateLocalProductDescription(mediaWithAi: MediaItemWithAi): String {
+        val ocrText = mediaWithAi.ocrText?.extractedText?.trim() ?: ""
+        val topObjects = mediaWithAi.objects.map { it.labelName.lowercase(Locale.ROOT) }
+        val topClassifications = mediaWithAi.classifications.map { it.label.lowercase(Locale.ROOT) }
+
+        // Determine title / main subject from confirmed data
+        val itemTitle = when {
+            ocrText.isNotEmpty() && ocrText.length in 3..45 && !ocrText.contains("\n") -> ocrText
+            topObjects.isNotEmpty() -> translateLabelToArabic(topObjects.first())
+            topClassifications.isNotEmpty() -> translateLabelToArabic(topClassifications.first())
+            mediaWithAi.mediaItem.fileName.isNotBlank() &&
+                    !mediaWithAi.mediaItem.fileName.startsWith("IMG_") &&
+                    !mediaWithAi.mediaItem.fileName.startsWith("Screenshot_") &&
+                    !mediaWithAi.mediaItem.fileName.startsWith("VID_") -> {
+                mediaWithAi.mediaItem.fileName.substringBeforeLast(".").replace("_", " ").replace("-", " ")
+            }
+            else -> "منتج مميز"
+        }
+
+        // Detect specific content types (trading, document, generic product)
+        val isTrading = topClassifications.any { it.contains("trading") || it.contains("chart") || it.contains("candlestick") } ||
+                ocrText.contains("TradingView", ignoreCase = true) ||
+                ocrText.contains("USDT", ignoreCase = true) ||
+                ocrText.contains("BTC", ignoreCase = true) ||
+                ocrText.contains("تداول", ignoreCase = true)
+
+        val isDoc = topClassifications.any { it.contains("document") || it.contains("receipt") || it.contains("invoice") } ||
+                ocrText.contains("invoice", ignoreCase = true) ||
+                ocrText.contains("فاتورة", ignoreCase = true) ||
+                ocrText.contains("إيصال", ignoreCase = true)
+
+        val sb = StringBuilder()
+        sb.append(itemTitle).append("\n\n")
+
+        if (isTrading) {
+            sb.append("مخطط تداول ورسم بياني تحليلي.")
+        } else if (isDoc) {
+            sb.append("مستند وبيانات توثيقية.")
+        } else {
+            // Short factual description based on identified tags
+            val tagDescriptions = mutableListOf<String>()
+            for (obj in topObjects.take(3)) {
+                val arabicTag = translateLabelToArabic(obj)
+                if (arabicTag != itemTitle && !tagDescriptions.contains(arabicTag)) {
+                    tagDescriptions.add(arabicTag)
+                }
+            }
+            if (tagDescriptions.isNotEmpty()) {
+                sb.append("يتضمن: ").append(tagDescriptions.joinToString("، ")).append(".\n")
+                sb.append("تصميم أنيق ومناسب للاستخدام اليومي.")
+            } else {
+                sb.append("منتج عالي الجودة بتصميم أنيق ومناسب.")
+            }
+        }
+
+        sb.append("\n\n").append(DEFAULT_SUFFIX)
+        return sb.toString().trim()
+    }
+
+    /**
+     * Builds an Android Intent for sharing media (image or video) with an optional text caption.
+     * Grants read URI permission and respects the target package when specified.
+     */
+    fun buildShareIntent(
+        mediaItem: MediaItem,
+        descriptionText: String? = null,
+        targetPackage: String? = null
+    ): Intent {
+        val mime = if (mediaItem.mimeType.isNotBlank()) mediaItem.mimeType else {
+            if (mediaItem.isVideo) "video/mp4" else "image/jpeg"
+        }
+        return Intent(Intent.ACTION_SEND).apply {
+            type = mime
+            putExtra(Intent.EXTRA_STREAM, Uri.parse(mediaItem.uriString))
+            if (!descriptionText.isNullOrBlank()) {
+                putExtra(Intent.EXTRA_TEXT, descriptionText)
+            }
+            if (!targetPackage.isNullOrBlank()) {
+                setPackage(targetPackage)
+            }
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
     }
 
     private fun callGeminiVisionApi(
@@ -54,13 +151,13 @@ object AiShareDescriptionGenerator {
             if (base64Image.isEmpty()) return null
 
             val systemPrompt = """
-                أنت مساعد ذكي متخصص في كتابة وصف مبيعات احترافي للمنتجات الظاهرة بالصور والمخصصة للمشاركة عبر واتساب.
+                أنت مساعد ذكي متخصص في كتابة وصف مبيعات احترافي للمنتجات الظاهرة بالصور والمخصصة للمشاركة للعملاء عبر واتساب.
                 
                 التعليمات الصارمة:
                 1. صف المنتج الظاهر في الصورة فقط وبدقة ودون أي مبالغة.
-                2. يمنع منعاً باتاً اختراع: السعر، الماركة، الموديل، المواصفات الفنية، الأبعاد، الخامات، الضمان، أو حالة التوفر.
+                2. يمنع منعاً باتاً اختراع: السعر، الماركة، الموديل، المواصفات الفنية، الأبعاد، الخامات، الضمان، أو بلد المنشأ.
                 3. اكتب بأسلوب تسويقي أنيق وقصير جداً باللغة العربية (1 إلى 3 جمل قصيرة).
-                4. يجب أن ينتهي النص تماماً بهذه العبارة:
+                4. يجب أن ينتهي النص تماماً بهذه العبارة في سطر منفصل:
                 $DEFAULT_SUFFIX
             """.trimIndent()
 
@@ -114,27 +211,6 @@ object AiShareDescriptionGenerator {
         }
     }
 
-    private fun generateLocalProductDescription(mediaWithAi: MediaItemWithAi): String {
-        val ocrText = mediaWithAi.ocrText?.extractedText?.trim() ?: ""
-        val topObjects = mediaWithAi.objects.take(3).map { it.labelName.lowercase() }
-        val topClassifications = mediaWithAi.classifications.take(3).map { it.label.lowercase() }
-
-        val sb = StringBuilder()
-
-        val itemTitle = when {
-            ocrText.isNotEmpty() && ocrText.length < 40 -> ocrText
-            topObjects.isNotEmpty() -> translateLabelToArabic(topObjects.first())
-            topClassifications.isNotEmpty() -> translateLabelToArabic(topClassifications.first())
-            else -> "هذا المنتج"
-        }
-
-        sb.append("منتج أنيق بلمسات مرتبة وتصميم مميز.\n")
-        sb.append("يتميز بالجودة والمظهر العصري المناسب للاستخدام اليومي.\n\n")
-        sb.append(DEFAULT_SUFFIX)
-
-        return sb.toString()
-    }
-
     private fun formatAndCleanDescription(rawText: String): String {
         var text = rawText.trim()
         if (!text.endsWith(DEFAULT_SUFFIX)) {
@@ -144,17 +220,26 @@ object AiShareDescriptionGenerator {
         return text
     }
 
-    private fun translateLabelToArabic(label: String): String {
+    fun translateLabelToArabic(label: String): String {
+        val l = label.lowercase(Locale.ROOT)
         return when {
-            label.contains("shoe") || label.contains("sneaker") || label.contains("boot") -> "حذاء أنيق"
-            label.contains("bag") || label.contains("handbag") -> "حقيبة متميزة"
-            label.contains("watch") -> "ساعة أنيقة"
-            label.contains("phone") || label.contains("mobile") -> "هاتف ذكي"
-            label.contains("laptop") || label.contains("computer") -> "جهاز كمبيوتر"
-            label.contains("bottle") -> "عبوة أنيقة"
-            label.contains("box") || label.contains("package") -> "صندوق منظم"
-            label.contains("perfume") -> "عطر فاخر"
-            label.contains("shirt") || label.contains("dress") || label.contains("clothing") -> "ملابس عصرية"
+            l.contains("shoe") || l.contains("sneaker") || l.contains("boot") -> "حذاء أنيق"
+            l.contains("bag") || l.contains("handbag") || l.contains("backpack") -> "حقيبة متميزة"
+            l.contains("watch") || l.contains("smartwatch") -> "ساعة أنيقة"
+            l.contains("phone") || l.contains("mobile") || l.contains("cell") -> "هاتف ذكي"
+            l.contains("laptop") || l.contains("computer") -> "جهاز كمبيوتر"
+            l.contains("bottle") -> "عبوة أنيقة"
+            l.contains("box") || l.contains("package") -> "علبة مميزة"
+            l.contains("perfume") || l.contains("cosmetic") -> "عطر ومستحضرات"
+            l.contains("shirt") || l.contains("dress") || l.contains("clothing") || l.contains("t-shirt") -> "ملابس عصرية"
+            l.contains("car") || l.contains("vehicle") || l.contains("automobile") -> "سيارة"
+            l.contains("food") || l.contains("meal") || l.contains("dish") -> "وجبة طعام"
+            l.contains("pizza") -> "بيتزا"
+            l.contains("coffee") || l.contains("tea") -> "مشروب ساخن"
+            l.contains("glasses") || l.contains("sunglasses") -> "نظارة"
+            l.contains("ring") || l.contains("necklace") || l.contains("jewelry") -> "مجوهرات وإكسسوارات"
+            l.contains("candlestick") || l.contains("chart") -> "رسم بياني"
+            l.contains("document") || l.contains("receipt") -> "مستند"
             else -> "منتج مميز"
         }
     }

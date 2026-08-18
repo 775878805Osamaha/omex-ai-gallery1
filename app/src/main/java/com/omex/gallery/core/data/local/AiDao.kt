@@ -17,12 +17,24 @@ interface AiDao {
     @Query("SELECT * FROM image_classifications WHERE mediaId = :mediaId ORDER BY confidence DESC")
     suspend fun getClassificationsForMedia(mediaId: Long): List<ImageClassificationEntity>
 
+    @Query("SELECT * FROM image_classifications")
+    fun getAllClassificationsFlow(): Flow<List<ImageClassificationEntity>>
+
+    @Query("SELECT * FROM image_classifications")
+    suspend fun getAllClassifications(): List<ImageClassificationEntity>
+
     // Detected Objects
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertObjects(objects: List<DetectedObjectEntity>)
 
     @Query("SELECT * FROM detected_objects WHERE mediaId = :mediaId ORDER BY score DESC")
     suspend fun getObjectsForMedia(mediaId: Long): List<DetectedObjectEntity>
+
+    @Query("SELECT * FROM detected_objects")
+    fun getAllObjectsFlow(): Flow<List<DetectedObjectEntity>>
+
+    @Query("SELECT * FROM detected_objects")
+    suspend fun getAllObjects(): List<DetectedObjectEntity>
 
     // ML Search Filter Metadata
     @Query("SELECT DISTINCT category FROM image_classifications WHERE category IS NOT NULL AND category != ''")
@@ -111,6 +123,12 @@ interface AiDao {
     @Update
     suspend fun updateOcrText(ocrText: OcrTextEntity)
 
+    @Query("SELECT * FROM ocr_text_results")
+    fun getAllOcrFlow(): Flow<List<OcrTextEntity>>
+
+    @Query("SELECT * FROM ocr_text_results")
+    suspend fun getAllOcrResults(): List<OcrTextEntity>
+
     @Query("SELECT * FROM ocr_text_results WHERE mediaId = :mediaId LIMIT 1")
     suspend fun getOcrForMedia(mediaId: Long): OcrTextEntity?
 
@@ -130,5 +148,37 @@ interface AiDao {
         deleteEmbeddings(mediaId)
         deleteMetadata(mediaId)
         deleteOcrForMedia(mediaId)
+    }
+
+    @Query("DELETE FROM image_classifications WHERE mediaId IN (:mediaIds)")
+    suspend fun deleteClassificationsList(mediaIds: List<Long>)
+
+    @Query("DELETE FROM detected_objects WHERE mediaId IN (:mediaIds)")
+    suspend fun deleteObjectsList(mediaIds: List<Long>)
+
+    @Query("DELETE FROM detected_faces WHERE mediaId IN (:mediaIds)")
+    suspend fun deleteFacesList(mediaIds: List<Long>)
+
+    @Query("DELETE FROM face_embeddings WHERE mediaId IN (:mediaIds)")
+    suspend fun deleteEmbeddingsList(mediaIds: List<Long>)
+
+    @Query("DELETE FROM image_metadata WHERE mediaId IN (:mediaIds)")
+    suspend fun deleteMetadataList(mediaIds: List<Long>)
+
+    @Query("DELETE FROM ocr_text_results WHERE mediaId IN (:mediaIds)")
+    suspend fun deleteOcrForMediaList(mediaIds: List<Long>)
+
+    @Query("DELETE FROM duplicate_members WHERE mediaId IN (:mediaIds)")
+    suspend fun deleteDuplicateMembersList(mediaIds: List<Long>)
+
+    suspend fun deleteAiDataForMediaList(mediaIds: List<Long>) {
+        if (mediaIds.isEmpty()) return
+        deleteClassificationsList(mediaIds)
+        deleteObjectsList(mediaIds)
+        deleteFacesList(mediaIds)
+        deleteEmbeddingsList(mediaIds)
+        deleteMetadataList(mediaIds)
+        deleteOcrForMediaList(mediaIds)
+        deleteDuplicateMembersList(mediaIds)
     }
 }

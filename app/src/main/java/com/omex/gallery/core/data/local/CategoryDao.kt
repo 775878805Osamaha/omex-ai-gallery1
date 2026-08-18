@@ -24,8 +24,17 @@ interface CategoryDao {
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertCrossRef(crossRef: MediaItemCategoryCrossRef)
 
+    @Query("SELECT * FROM media_item_category_cross_ref")
+    fun getAllCrossRefsFlow(): Flow<List<MediaItemCategoryCrossRef>>
+
+    @Query("SELECT * FROM media_item_category_cross_ref")
+    suspend fun getAllCrossRefs(): List<MediaItemCategoryCrossRef>
+
     @Query("DELETE FROM media_item_category_cross_ref WHERE mediaId = :mediaId")
     suspend fun clearCategoriesForMedia(mediaId: Long)
+
+    @Query("DELETE FROM media_item_category_cross_ref WHERE mediaId IN (:mediaIds)")
+    suspend fun clearCategoriesForMediaList(mediaIds: List<Long>)
 
     @Query("SELECT categoryId FROM media_item_category_cross_ref WHERE mediaId = :mediaId")
     suspend fun getCategoriesForMedia(mediaId: Long): List<String>

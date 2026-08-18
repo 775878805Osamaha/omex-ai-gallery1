@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.paging.PagingData
 import androidx.paging.cachedIn
 import com.omex.gallery.core.indexer.IndexScheduler
+import com.omex.gallery.domain.model.AiAlbumSuggestion
 import com.omex.gallery.domain.model.Album
 import com.omex.gallery.domain.model.AlbumType
 import com.omex.gallery.domain.model.DuplicateGroupWithMedia
@@ -83,20 +84,89 @@ class GalleryViewModel(
     private val _selectedItemIds = MutableStateFlow<Set<Long>>(emptySet())
     val selectedItemIds: StateFlow<Set<Long>> = _selectedItemIds.asStateFlow()
 
+    val isSelectionMode: StateFlow<Boolean> = _selectedItemIds
+        .map { it.isNotEmpty() }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
     private val _selectedCategoryIds = MutableStateFlow<Set<String>>(emptySet())
     val selectedCategoryIds: StateFlow<Set<String>> = _selectedCategoryIds.asStateFlow()
 
+    fun setSearchFilterState(state: SearchFilterState) {
+        _searchFilterState.value = state
+        _selectedCategoryIds.value = state.allSelectedCategories
+    }
+
+    fun updateSearchFilterState(transform: (SearchFilterState) -> SearchFilterState) {
+        val updated = transform(_searchFilterState.value)
+        setSearchFilterState(updated)
+    }
+
+    fun removeCategoryFilter(categoryId: String) {
+        val currentCats = _searchFilterState.value.allSelectedCategories.toMutableSet()
+        currentCats.remove(categoryId)
+        setSearchFilterState(_searchFilterState.value.copy(
+            categoryId = null,
+            selectedCategoryIds = currentCats
+        ))
+    }
+
+    fun removeMediaTypeFilter() {
+        setSearchFilterState(_searchFilterState.value.copy(isVideo = null))
+    }
+
+    fun removeFavoriteFilter() {
+        setSearchFilterState(_searchFilterState.value.copy(isFavorite = null))
+    }
+
+    fun removeDateFilter() {
+        setSearchFilterState(_searchFilterState.value.copy(
+            dateFilterOption = com.omex.gallery.domain.model.DateFilterOption.ALL,
+            startDateMs = null,
+            endDateMs = null
+        ))
+    }
+
+    fun removeFileSizeFilter() {
+        setSearchFilterState(_searchFilterState.value.copy(
+            fileSizeOption = com.omex.gallery.domain.model.FileSizeFilterOption.ALL
+        ))
+    }
+
+    fun removeExtensionFilter(extension: String) {
+        val currentExts = _searchFilterState.value.selectedExtensions.toMutableSet()
+        currentExts.remove(extension)
+        setSearchFilterState(_searchFilterState.value.copy(selectedExtensions = currentExts))
+    }
+
+    fun removeDimensionFilter() {
+        setSearchFilterState(_searchFilterState.value.copy(
+            dimensionOption = com.omex.gallery.domain.model.DimensionFilterOption.ALL
+        ))
+    }
+
+    fun clearAllAdvancedFilters() {
+        _searchFilterState.value = SearchFilterState()
+        _selectedCategoryIds.value = emptySet()
+    }
+
     fun toggleCategoryFilter(categoryId: String) {
-        val current = _selectedCategoryIds.value
-        _selectedCategoryIds.value = if (current.contains(categoryId)) {
-            current - categoryId
+        val current = _searchFilterState.value.allSelectedCategories.toMutableSet()
+        if (current.contains(categoryId)) {
+            current.remove(categoryId)
         } else {
-            current + categoryId
+            current.add(categoryId)
         }
+        setSearchFilterState(_searchFilterState.value.copy(
+            categoryId = null,
+            selectedCategoryIds = current
+        ))
     }
 
     fun clearCategoryFilters() {
-        _selectedCategoryIds.value = emptySet()
+        setSearchFilterState(_searchFilterState.value.copy(
+            categoryId = null,
+            selectedCategoryIds = emptySet()
+        ))
     }
 
     val categories: StateFlow<List<com.omex.gallery.core.data.local.MediaCategoryEntity>> = repository.getAllCategories()
@@ -131,6 +201,16 @@ class GalleryViewModel(
         }
     }
 
+    fun enterSelectionMode(initialId: Long? = null) {
+        if (initialId != null) {
+            _selectedItemIds.value = _selectedItemIds.value + initialId
+        }
+    }
+
+    fun exitSelectionMode() {
+        clearSelection()
+    }
+
     fun toggleSelection(itemId: Long) {
         val current = _selectedItemIds.value
         _selectedItemIds.value = if (current.contains(itemId)) {
@@ -144,6 +224,10 @@ class GalleryViewModel(
         _selectedItemIds.value = items.map { it.id }.toSet()
     }
 
+    fun deselectAll() {
+        clearSelection()
+    }
+
     fun clearSelection() {
         _selectedItemIds.value = emptySet()
     }
@@ -152,7 +236,7 @@ class GalleryViewModel(
         val ids = _selectedItemIds.value
         if (ids.isEmpty()) return
         viewModelScope.launch {
-            ids.forEach { repository.deleteMediaItem(it) }
+            repository.deleteMediaItems(ids.toList())
             clearSelection()
         }
     }
@@ -175,8 +259,79 @@ class GalleryViewModel(
     val allMediaRaw: StateFlow<List<MediaItem>> = repository.getAllMedia()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    val albums: StateFlow<List<Album>> = allMediaRaw.map { mediaList ->
-        computeAlbums(mediaList)
+    private val _dismissedSuggestionIds = MutableStateFlow<Set<String>>(emptySet())
+    val dismissedSuggestionIds: StateFlow<Set<String>> = _dismissedSuggestionIds.asStateFlow()
+
+    private val _savedThemedAlbums = MutableStateFlow<List<Album>>(emptyList())
+    val savedThemedAlbums: StateFlow<List<Album>> = _savedThemedAlbums.asStateFlow()
+
+    val aiAlbumSuggestions: StateFlow<List<AiAlbumSuggestion>> = combine(
+        repository.getAiAlbumSuggestions(),
+        _dismissedSuggestionIds
+    ) { rawSuggestions, dismissed ->
+        rawSuggestions.filter { !dismissed.contains(it.id) }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    fun dismissSuggestion(suggestionId: String) {
+        _dismissedSuggestionIds.value = _dismissedSuggestionIds.value + suggestionId
+    }
+
+    fun restoreDismissedSuggestions() {
+        _dismissedSuggestionIds.value = emptySet()
+    }
+
+    fun createThemedAlbumFromSuggestion(suggestion: AiAlbumSuggestion) {
+        val newAlbum = Album(
+            id = "themed_ai_${suggestion.id}",
+            title = "${suggestion.titleArabic} (${suggestion.title})",
+            coverUri = suggestion.sampleCoverUris.firstOrNull(),
+            itemCount = suggestion.mediaCount,
+            albumType = AlbumType.THEMED_AI,
+            themeKey = suggestion.themeKey,
+            matchingMediaIds = suggestion.matchingMediaIds
+        )
+        val current = _savedThemedAlbums.value.filter { it.id != newAlbum.id }
+        _savedThemedAlbums.value = current + newAlbum
+        _dismissedSuggestionIds.value = _dismissedSuggestionIds.value + suggestion.id
+    }
+
+    fun selectSuggestionAsAlbum(suggestion: AiAlbumSuggestion) {
+        val tempAlbum = Album(
+            id = "themed_ai_${suggestion.id}",
+            title = "${suggestion.titleArabic} (${suggestion.title})",
+            coverUri = suggestion.sampleCoverUris.firstOrNull(),
+            itemCount = suggestion.mediaCount,
+            albumType = AlbumType.THEMED_AI,
+            themeKey = suggestion.themeKey,
+            matchingMediaIds = suggestion.matchingMediaIds
+        )
+        selectAlbum(tempAlbum)
+    }
+
+    fun createAllSuggestedAlbums() {
+        val currentSuggestions = aiAlbumSuggestions.value
+        val newAlbums = currentSuggestions.map { suggestion ->
+            Album(
+                id = "themed_ai_${suggestion.id}",
+                title = "${suggestion.titleArabic} (${suggestion.title})",
+                coverUri = suggestion.sampleCoverUris.firstOrNull(),
+                itemCount = suggestion.mediaCount,
+                albumType = AlbumType.THEMED_AI,
+                themeKey = suggestion.themeKey,
+                matchingMediaIds = suggestion.matchingMediaIds
+            )
+        }
+        val existingIds = _savedThemedAlbums.value.map { it.id }.toSet()
+        _savedThemedAlbums.value = _savedThemedAlbums.value + newAlbums.filter { !existingIds.contains(it.id) }
+        _dismissedSuggestionIds.value = _dismissedSuggestionIds.value + currentSuggestions.map { it.id }
+    }
+
+    val albums: StateFlow<List<Album>> = combine(
+        allMediaRaw,
+        _savedThemedAlbums
+    ) { mediaList, savedThemed ->
+        val computed = computeAlbums(mediaList)
+        savedThemed + computed
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     private fun computeAlbums(mediaList: List<MediaItem>): List<Album> {
@@ -299,10 +454,25 @@ class GalleryViewModel(
     ) { tab, filterState, album, sortOrder, categoryIds ->
         Tuple5(tab, filterState, album, sortOrder, categoryIds)
     }.flatMapLatest { (tab, filterState, album, sortOrder, categoryIds) ->
-        val baseFlow = if (categoryIds.isNotEmpty()) {
-            repository.getMediaForCategories(categoryIds.toList())
-        } else if (filterState.hasActiveFilters) {
-            repository.searchMediaAdvanced(filterState)
+        val mergedCategories = (filterState.allSelectedCategories + categoryIds).toSet()
+        val effectiveTabIsVideo = when (tab) {
+            MediaFilterTab.PHOTOS -> false
+            MediaFilterTab.VIDEOS -> true
+            else -> filterState.isVideo
+        }
+        val effectiveTabIsFavorite = when (tab) {
+            MediaFilterTab.FAVORITES -> true
+            else -> filterState.isFavorite
+        }
+        val effectiveFilter = filterState.copy(
+            isVideo = effectiveTabIsVideo,
+            isFavorite = effectiveTabIsFavorite,
+            selectedCategoryIds = mergedCategories,
+            categoryId = null
+        )
+
+        val baseFlow = if (effectiveFilter.hasActiveFilters || mergedCategories.isNotEmpty()) {
+            repository.searchMediaAdvanced(effectiveFilter)
         } else {
             when (tab) {
                 MediaFilterTab.ALL -> repository.getAllMedia()
@@ -337,6 +507,14 @@ class GalleryViewModel(
                     AlbumType.FOLDER -> {
                         val folderName = album.folderPath ?: ""
                         filtered.filter { File(it.filePath).parentFile?.name == folderName }
+                    }
+                    AlbumType.THEMED_AI -> {
+                        if (album.matchingMediaIds.isNotEmpty()) {
+                            val idSet = album.matchingMediaIds.toSet()
+                            filtered.filter { idSet.contains(it.id) }
+                        } else {
+                            filtered
+                        }
                     }
                 }
             }

@@ -21,6 +21,8 @@ import com.omex.gallery.ui.feature_diagnostic.DiagnosticScreen
 import com.omex.gallery.ui.feature_indexing.IndexingStatusScreen
 import com.omex.gallery.ui.feature_search.SearchScreen
 import com.omex.gallery.ui.feature_search.SearchViewModel
+import com.omex.gallery.ui.feature_storage.StorageAnalyzerScreen
+import com.omex.gallery.ui.feature_storage.StorageAnalyzerViewModel
 
 sealed class Screen(val route: String) {
     data object Gallery : Screen("gallery")
@@ -34,6 +36,7 @@ sealed class Screen(val route: String) {
     }
     data object IndexingStatus : Screen("indexing_status")
     data object Diagnostic : Screen("diagnostic")
+    data object StorageAnalyzer : Screen("storage_analyzer")
 }
 
 @Composable
@@ -65,6 +68,9 @@ fun AppNavGraph(
                 },
                 onOpenAiChat = {
                     navController.navigate(Screen.AiChat.route)
+                },
+                onOpenStorageAnalyzer = {
+                    navController.navigate(Screen.StorageAnalyzer.route)
                 }
             )
         }
@@ -151,6 +157,20 @@ fun AppNavGraph(
             DiagnosticScreen(
                 mediaRepository = appContainer.mediaRepository,
                 onBackClick = { navController.popBackStack() }
+            )
+        }
+
+        composable(Screen.StorageAnalyzer.route) {
+            val storageViewModel: StorageAnalyzerViewModel = viewModel(
+                factory = StorageAnalyzerViewModel.Factory(appContainer.mediaRepository)
+            )
+
+            StorageAnalyzerScreen(
+                viewModel = storageViewModel,
+                onBackClick = { navController.popBackStack() },
+                onMediaClick = { mediaId ->
+                    navController.navigate(Screen.MediaDetail.createRoute(mediaId))
+                }
             )
         }
     }

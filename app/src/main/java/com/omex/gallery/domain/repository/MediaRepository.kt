@@ -32,6 +32,7 @@ interface MediaRepository {
     suspend fun getAllMediaItems(): List<MediaItem>
     suspend fun insertMediaItems(items: List<MediaItem>)
     suspend fun deleteMediaItem(id: Long)
+    suspend fun deleteMediaItems(ids: List<Long>): Result<Int>
     suspend fun toggleFavorite(id: Long, isFavorite: Boolean)
     suspend fun scanAndIndexGallery(isFullReindex: Boolean = false): Result<Int>
     suspend fun regenerateThumbnails(): Result<Int>
@@ -66,4 +67,7 @@ interface MediaRepository {
     fun getCategoryMediaCount(categoryId: String): Flow<Int>
     suspend fun getLatestMediaForCategory(categoryId: String): MediaItem?
     suspend fun classifyUnclassifiedMedia(context: Context): Result<Int>
+
+    // AI Album Suggestions
+    fun getAiAlbumSuggestions(): Flow<List<AiAlbumSuggestion>>
 }

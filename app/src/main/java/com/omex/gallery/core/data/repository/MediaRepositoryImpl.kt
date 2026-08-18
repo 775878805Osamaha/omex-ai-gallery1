@@ -135,16 +135,86 @@ class MediaRepositoryImpl(
     }
 
     override fun searchMedia(query: String): Flow<List<MediaItem>> {
-        return mediaDao.searchMedia(query).map { list -> list.map { it.toDomain() } }
+        val trimmed = query.trim()
+        val alias = com.omex.gallery.core.search.SmartSearchHelper.getCategoryAlias(trimmed)
+        return mediaDao.searchMedia(trimmed, alias).map { list -> list.map { it.toDomain() } }
     }
 
     override fun searchMediaAdvanced(filterState: SearchFilterState): Flow<List<MediaItem>> {
+        val trimmed = filterState.query.trim()
+        val alias = com.omex.gallery.core.search.SmartSearchHelper.getCategoryAlias(trimmed)
+
+        // Date bounds calculation
+        val (minDateMs, maxDateMs) = when (filterState.dateFilterOption) {
+            com.omex.gallery.domain.model.DateFilterOption.ALL -> Pair(null, null)
+            com.omex.gallery.domain.model.DateFilterOption.TODAY -> {
+                val calendar = java.util.Calendar.getInstance()
+                calendar.set(java.util.Calendar.HOUR_OF_DAY, 0)
+                calendar.set(java.util.Calendar.MINUTE, 0)
+                calendar.set(java.util.Calendar.SECOND, 0)
+                calendar.set(java.util.Calendar.MILLISECOND, 0)
+                Pair(calendar.timeInMillis, null)
+            }
+            com.omex.gallery.domain.model.DateFilterOption.LAST_7_DAYS -> {
+                Pair(System.currentTimeMillis() - 7L * 24 * 60 * 60 * 1000L, null)
+            }
+            com.omex.gallery.domain.model.DateFilterOption.LAST_30_DAYS -> {
+                Pair(System.currentTimeMillis() - 30L * 24 * 60 * 60 * 1000L, null)
+            }
+            com.omex.gallery.domain.model.DateFilterOption.THIS_YEAR -> {
+                val calendar = java.util.Calendar.getInstance()
+                calendar.set(java.util.Calendar.DAY_OF_YEAR, 1)
+                calendar.set(java.util.Calendar.HOUR_OF_DAY, 0)
+                calendar.set(java.util.Calendar.MINUTE, 0)
+                calendar.set(java.util.Calendar.SECOND, 0)
+                calendar.set(java.util.Calendar.MILLISECOND, 0)
+                Pair(calendar.timeInMillis, null)
+            }
+            com.omex.gallery.domain.model.DateFilterOption.CUSTOM -> {
+                Pair(filterState.startDateMs, filterState.endDateMs)
+            }
+        }
+
+        // Size bounds calculation
+        val (minSizeBytes, maxSizeBytes) = when (filterState.fileSizeOption) {
+            com.omex.gallery.domain.model.FileSizeFilterOption.ALL -> Pair(null, null)
+            com.omex.gallery.domain.model.FileSizeFilterOption.LESS_THAN_1MB -> Pair(null, 1024L * 1024L - 1)
+            com.omex.gallery.domain.model.FileSizeFilterOption.BETWEEN_1_5MB -> Pair(1024L * 1024L, 5L * 1024L * 1024L)
+            com.omex.gallery.domain.model.FileSizeFilterOption.BETWEEN_5_50MB -> Pair(5L * 1024L * 1024L + 1, 50L * 1024L * 1024L)
+            com.omex.gallery.domain.model.FileSizeFilterOption.GREATER_THAN_50MB -> Pair(50L * 1024L * 1024L + 1, null)
+        }
+
+        // Dimension bounds calculation
+        val (minPixels, maxPixels) = when (filterState.dimensionOption) {
+            com.omex.gallery.domain.model.DimensionFilterOption.ALL -> Pair(null, null)
+            com.omex.gallery.domain.model.DimensionFilterOption.SMALL -> Pair(0L, 999_999L)
+            com.omex.gallery.domain.model.DimensionFilterOption.MEDIUM -> Pair(1_000_000L, 4_000_000L)
+            com.omex.gallery.domain.model.DimensionFilterOption.HIGH_RES -> Pair(4_000_001L, null)
+        }
+
+        val cats = filterState.allSelectedCategories.toList()
+        val exts = filterState.selectedExtensions.map { it.uppercase().trim().removePrefix(".") }.filter { it.isNotEmpty() }
+
         return mediaDao.searchMediaAdvanced(
-            query = filterState.query.trim(),
+            query = trimmed,
+            categoryAlias = alias,
             cameraModel = filterState.cameraModel,
             cameraMake = filterState.cameraMake,
             mlCategory = filterState.mlCategory,
             mlLabel = filterState.mlLabel,
+            categoryId = filterState.categoryId,
+            categoryIds = cats,
+            categoryIdsCount = cats.size,
+            isVideo = filterState.isVideo,
+            isFavorite = filterState.isFavorite,
+            minDateMs = minDateMs,
+            maxDateMs = maxDateMs,
+            minSizeBytes = minSizeBytes,
+            maxSizeBytes = maxSizeBytes,
+            minPixels = minPixels,
+            maxPixels = maxPixels,
+            extensions = exts,
+            extensionsCount = exts.size,
             gpsOnly = if (filterState.isGpsOnly) 1 else 0
         ).map { list -> list.map { it.toDomain() } }
     }
@@ -208,6 +278,39 @@ class MediaRepositoryImpl(
         }
         mediaDao.deleteById(id)
         aiDao.deleteAiDataForMedia(id)
+        categoryDao.clearCategoriesForMedia(id)
+    }
+
+    override suspend fun deleteMediaItems(ids: List<Long>): Result<Int> = withContext(Dispatchers.IO) {
+        if (ids.isEmpty()) return@withContext Result.success(0)
+        try {
+            val items = mediaDao.getMediaByIds(ids)
+            items.forEach { item ->
+                try {
+                    if (item.uriString.isNotEmpty()) {
+                        context.contentResolver.delete(Uri.parse(item.uriString), null, null)
+                    }
+                } catch (e: Exception) {
+                    // Ignore security or system exceptions on scoped storage
+                }
+                if (item.filePath.isNotEmpty()) {
+                    try {
+                        val f = File(item.filePath)
+                        if (f.exists()) {
+                            f.delete()
+                        }
+                    } catch (e: Exception) {
+                        // Ignore
+                    }
+                }
+            }
+            mediaDao.deleteByIds(ids)
+            aiDao.deleteAiDataForMediaList(ids)
+            categoryDao.clearCategoriesForMediaList(ids)
+            Result.success(items.size)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
     }
 
     override suspend fun toggleFavorite(id: Long, isFavorite: Boolean) {
@@ -594,6 +697,24 @@ class MediaRepositoryImpl(
             Result.success(classifiedCount)
         } catch (e: Exception) {
             Result.failure(e)
+        }
+    }
+
+    override fun getAiAlbumSuggestions(): Flow<List<com.omex.gallery.domain.model.AiAlbumSuggestion>> {
+        return combine(
+            getAllMedia(),
+            aiDao.getAllClassificationsFlow(),
+            aiDao.getAllObjectsFlow(),
+            categoryDao.getAllCrossRefsFlow(),
+            aiDao.getAllOcrFlow()
+        ) { mediaList, classifications, objects, crossRefs, ocrList ->
+            com.omex.gallery.core.ai.suggestions.AiSuggestionsEngine.generateSuggestions(
+                mediaList = mediaList,
+                classifications = classifications,
+                objects = objects,
+                categoryCrossRefs = crossRefs,
+                ocrList = ocrList
+            )
         }
     }
 }

@@ -175,6 +175,7 @@ class AskImageTest {
         override suspend fun getAllMediaItems(): List<MediaItem> = emptyList()
         override suspend fun insertMediaItems(items: List<MediaItem>) {}
         override suspend fun deleteMediaItem(id: Long) {}
+        override suspend fun deleteMediaItems(ids: List<Long>): Result<Int> = Result.success(ids.size)
         override suspend fun toggleFavorite(id: Long, isFavorite: Boolean) {}
         override suspend fun scanAndIndexGallery(isFullReindex: Boolean): Result<Int> = Result.success(0)
         override suspend fun regenerateThumbnails(): Result<Int> = Result.success(0)
@@ -196,5 +197,6 @@ class AskImageTest {
         override fun getCategoryMediaCount(categoryId: String): Flow<Int> = flow { emit(0) }
         override suspend fun getLatestMediaForCategory(categoryId: String): MediaItem? = null
         override suspend fun classifyUnclassifiedMedia(context: Context): Result<Int> = Result.success(0)
+        override fun getAiAlbumSuggestions(): Flow<List<com.omex.gallery.domain.model.AiAlbumSuggestion>> = flow { emit(emptyList()) }
     }
 }

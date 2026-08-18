@@ -5,6 +5,14 @@ import android.net.Uri
 import android.widget.MediaController
 import android.widget.VideoView
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -25,6 +33,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -40,7 +49,12 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.RestartAlt
+import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.ZoomIn
+import androidx.compose.material.icons.filled.ZoomOut
+import androidx.compose.material.icons.filled.ZoomOutMap
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -54,6 +68,8 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -67,6 +83,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
@@ -78,10 +95,12 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -125,8 +144,12 @@ fun MediaDetailScreen(
     var showBoundingBoxes by remember { mutableStateOf(true) }
     var showDeleteDialog by remember { mutableStateOf(false) }
     var showShareSheet by remember { mutableStateOf(false) }
+    var showCustomerSharePreview by remember { mutableStateOf(false) }
+    var customerShareText by remember { mutableStateOf("") }
     var isGeneratingDescription by remember { mutableStateOf(false) }
-    val coroutineScope = androidx.compose.runtime.rememberCoroutineScope()
+    var isCurrentPageZoomed by remember { mutableStateOf(false) }
+    var showControls by remember { mutableStateOf(true) }
+    val coroutineScope = rememberCoroutineScope()
 
     val pagerState = rememberPagerState(
         initialPage = currentIndex.coerceAtLeast(0),
@@ -137,6 +160,7 @@ fun MediaDetailScreen(
     LaunchedEffect(currentIndex) {
         if (currentIndex in mediaItemList.indices && pagerState.currentPage != currentIndex) {
             pagerState.scrollToPage(currentIndex)
+            isCurrentPageZoomed = false
         }
     }
 
@@ -144,6 +168,7 @@ fun MediaDetailScreen(
         snapshotFlow { pagerState.currentPage }.collect { page ->
             if (page in mediaItemList.indices) {
                 viewModel.setCurrentIndex(page)
+                isCurrentPageZoomed = false
             }
         }
     }
@@ -175,86 +200,92 @@ fun MediaDetailScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        text = mediaItem?.fileName ?: stringResource(R.string.media_viewer),
-                        maxLines = 1,
-                        style = MaterialTheme.typography.titleMedium,
-                        color = TextPrimaryDark
-                    )
-                },
-                navigationIcon = {
-                    IconButton(onClick = onBackClick, modifier = Modifier.testTag("detail_back_button")) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = stringResource(R.string.back),
-                            tint = TextPrimaryDark
+            AnimatedVisibility(
+                visible = showControls,
+                enter = fadeIn(tween(200)) + slideInVertically(tween(200)) { -it },
+                exit = fadeOut(tween(200)) + slideOutVertically(tween(200)) { -it }
+            ) {
+                TopAppBar(
+                    title = {
+                        Text(
+                            text = mediaItem?.fileName ?: stringResource(R.string.media_viewer),
+                            maxLines = 1,
+                            style = MaterialTheme.typography.titleMedium,
+                            color = TextPrimaryDark
                         )
-                    }
-                },
-                actions = {
-                    mediaItem?.let { item ->
-                        IconButton(
-                            onClick = { onAskAiClick?.invoke(item.id) },
-                            modifier = Modifier.testTag("detail_ask_ai_button")
-                        ) {
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = onBackClick, modifier = Modifier.testTag("detail_back_button")) {
                             Icon(
-                                imageVector = Icons.Default.AutoAwesome,
-                                contentDescription = stringResource(R.string.ask_image_title),
-                                tint = AmberAccent
-                            )
-                        }
-                    }
-                    IconButton(
-                        onClick = { viewModel.runAiAnalysis(context) },
-                        modifier = Modifier.testTag("run_ai_analysis_button")
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Memory,
-                            contentDescription = stringResource(R.string.run_ai),
-                            tint = CyanAccent
-                        )
-                    }
-                    mediaItem?.let { item ->
-                        IconButton(onClick = { viewModel.toggleFavorite() }, modifier = Modifier.testTag("detail_favorite_button")) {
-                            Icon(
-                                imageVector = if (item.isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                                contentDescription = stringResource(R.string.favorite),
-                                tint = if (item.isFavorite) AmberAccent else TextPrimaryDark
-                            )
-                        }
-                        IconButton(onClick = { viewModel.toggleExifSheet() }, modifier = Modifier.testTag("detail_info_button")) {
-                            Icon(
-                                imageVector = Icons.Default.Info,
-                                contentDescription = stringResource(R.string.ai_exif_info),
-                                tint = CyanAccent
-                            )
-                        }
-                        IconButton(
-                            onClick = { showShareSheet = true },
-                            modifier = Modifier.testTag("detail_share_button")
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Share,
-                                contentDescription = stringResource(R.string.share),
+                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = stringResource(R.string.back),
                                 tint = TextPrimaryDark
                             )
                         }
+                    },
+                    actions = {
+                        mediaItem?.let { item ->
+                            IconButton(
+                                onClick = { onAskAiClick?.invoke(item.id) },
+                                modifier = Modifier.testTag("detail_ask_ai_button")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.AutoAwesome,
+                                    contentDescription = stringResource(R.string.ask_image_title),
+                                    tint = AmberAccent
+                                )
+                            }
+                        }
                         IconButton(
-                            onClick = { showDeleteDialog = true },
-                            modifier = Modifier.testTag("detail_delete_button")
+                            onClick = { viewModel.runAiAnalysis(context) },
+                            modifier = Modifier.testTag("run_ai_analysis_button")
                         ) {
                             Icon(
-                                imageVector = Icons.Default.Delete,
-                                contentDescription = "Delete",
-                                tint = Color.Red.copy(alpha = 0.85f)
+                                imageVector = Icons.Default.Memory,
+                                contentDescription = stringResource(R.string.run_ai),
+                                tint = CyanAccent
                             )
                         }
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = ObsidianBg)
-            )
+                        mediaItem?.let { item ->
+                            IconButton(onClick = { viewModel.toggleFavorite() }, modifier = Modifier.testTag("detail_favorite_button")) {
+                                Icon(
+                                    imageVector = if (item.isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                                    contentDescription = stringResource(R.string.favorite),
+                                    tint = if (item.isFavorite) AmberAccent else TextPrimaryDark
+                                )
+                            }
+                            IconButton(onClick = { viewModel.toggleExifSheet() }, modifier = Modifier.testTag("detail_info_button")) {
+                                Icon(
+                                    imageVector = Icons.Default.Info,
+                                    contentDescription = stringResource(R.string.ai_exif_info),
+                                    tint = CyanAccent
+                                )
+                            }
+                            IconButton(
+                                onClick = { showShareSheet = true },
+                                modifier = Modifier.testTag("detail_share_button")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Share,
+                                    contentDescription = stringResource(R.string.share),
+                                    tint = TextPrimaryDark
+                                )
+                            }
+                            IconButton(
+                                onClick = { showDeleteDialog = true },
+                                modifier = Modifier.testTag("detail_delete_button")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Delete,
+                                    contentDescription = "Delete",
+                                    tint = Color.Red.copy(alpha = 0.85f)
+                                )
+                            }
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(containerColor = ObsidianBg)
+                )
+            }
         },
         containerColor = ObsidianBg
     ) { innerPadding ->
@@ -268,6 +299,7 @@ fun MediaDetailScreen(
             if (mediaItemList.isNotEmpty()) {
                 HorizontalPager(
                     state = pagerState,
+                    userScrollEnabled = !isCurrentPageZoomed,
                     modifier = Modifier.fillMaxSize()
                 ) { page ->
                     val item = mediaItemList.getOrNull(page)
@@ -276,14 +308,25 @@ fun MediaDetailScreen(
                             item = item,
                             superResState = superResState,
                             showBoundingBoxes = showBoundingBoxes,
-                            aiDetails = aiDetails
+                            aiDetails = aiDetails,
+                            onZoomChanged = { zoomed ->
+                                if (page == pagerState.currentPage) {
+                                    isCurrentPageZoomed = zoomed
+                                }
+                            },
+                            onToggleControls = {
+                                showControls = !showControls
+                            }
                         )
                     }
                 }
             }
 
             // Super Resolution Overlay Banner
-            Column(
+            AnimatedVisibility(
+                visible = showControls && !isCurrentPageZoomed,
+                enter = fadeIn(tween(200)) + slideInVertically(tween(200)) { it },
+                exit = fadeOut(tween(200)) + slideOutVertically(tween(200)) { it },
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .padding(16.dp)
@@ -658,7 +701,9 @@ fun MediaItemContentViewer(
     item: MediaItem,
     superResState: SuperResolutionState,
     showBoundingBoxes: Boolean,
-    aiDetails: com.omex.gallery.domain.model.MediaItemWithAi?
+    aiDetails: com.omex.gallery.domain.model.MediaItemWithAi?,
+    onZoomChanged: (Boolean) -> Unit = {},
+    onToggleControls: () -> Unit = {}
 ) {
     if (item.isVideo) {
         val context = LocalContext.current
@@ -770,41 +815,93 @@ fun MediaItemContentViewer(
             }
         }
     } else {
-        // Zoomable & Pannable Image Viewer
-        var scale by remember { mutableFloatStateOf(1f) }
-        var offsetX by remember { mutableFloatStateOf(0f) }
-        var offsetY by remember { mutableFloatStateOf(0f) }
+        // High-Precision Zoomable & Pannable Image Viewer with Pinch & Double-Tap
+        val coroutineScope = rememberCoroutineScope()
+        val scaleAnim = remember(item.id) { Animatable(1f) }
+        val offsetXAnim = remember(item.id) { Animatable(0f) }
+        val offsetYAnim = remember(item.id) { Animatable(0f) }
+        var containerSize by remember { mutableStateOf(IntSize.Zero) }
+
+        val isZoomed = scaleAnim.value > 1.05f
+
+        // Notify parent pager when zoom state changes
+        LaunchedEffect(isZoomed) {
+            onZoomChanged(isZoomed)
+        }
+
+        // Reset when switching media items
+        LaunchedEffect(item.id) {
+            scaleAnim.snapTo(1f)
+            offsetXAnim.snapTo(0f)
+            offsetYAnim.snapTo(0f)
+            onZoomChanged(false)
+        }
 
         val activeDisplayPath = when (superResState) {
             is SuperResolutionState.Success -> (superResState as SuperResolutionState.Success).upscaledPath
             else -> item.uriString
         }
 
+        fun clampOffsets(scale: Float, rawOffsetX: Float, rawOffsetY: Float): Pair<Float, Float> {
+            val maxOffsetX = ((containerSize.width * scale - containerSize.width) / 2f).coerceAtLeast(0f)
+            val maxOffsetY = ((containerSize.height * scale - containerSize.height) / 2f).coerceAtLeast(0f)
+            return Pair(
+                rawOffsetX.coerceIn(-maxOffsetX, maxOffsetX),
+                rawOffsetY.coerceIn(-maxOffsetY, maxOffsetY)
+            )
+        }
+
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .pointerInput(Unit) {
+                .onSizeChanged { containerSize = it }
+                .pointerInput(item.id, containerSize) {
                     detectTapGestures(
-                        onDoubleTap = {
-                            if (scale > 1f) {
-                                scale = 1f
-                                offsetX = 0f
-                                offsetY = 0f
-                            } else {
-                                scale = 2.5f
+                        onTap = {
+                            onToggleControls()
+                        },
+                        onDoubleTap = { tapOffset ->
+                            coroutineScope.launch {
+                                if (scaleAnim.value > 1.05f) {
+                                    // Smoothly animate back to 1x overview
+                                    launch { scaleAnim.animateTo(1f, tween(300, easing = FastOutSlowInEasing)) }
+                                    launch { offsetXAnim.animateTo(0f, tween(300, easing = FastOutSlowInEasing)) }
+                                    launch { offsetYAnim.animateTo(0f, tween(300, easing = FastOutSlowInEasing)) }
+                                } else {
+                                    // Smoothly zoom in to 2.5x targeted around the tapped focal location
+                                    val targetScale = 2.5f
+                                    val centerX = if (containerSize.width > 0) containerSize.width / 2f else tapOffset.x
+                                    val centerY = if (containerSize.height > 0) containerSize.height / 2f else tapOffset.y
+                                    val targetOffsetX = (centerX - tapOffset.x) * (targetScale - 1f)
+                                    val targetOffsetY = (centerY - tapOffset.y) * (targetScale - 1f)
+                                    val (clampedX, clampedY) = clampOffsets(targetScale, targetOffsetX, targetOffsetY)
+
+                                    launch { scaleAnim.animateTo(targetScale, tween(300, easing = FastOutSlowInEasing)) }
+                                    launch { offsetXAnim.animateTo(clampedX, tween(300, easing = FastOutSlowInEasing)) }
+                                    launch { offsetYAnim.animateTo(clampedY, tween(300, easing = FastOutSlowInEasing)) }
+                                }
                             }
                         }
                     )
                 }
-                .pointerInput(Unit) {
+                .pointerInput(item.id, containerSize) {
                     detectTransformGestures { _, pan, zoom, _ ->
-                        scale = (scale * zoom).coerceIn(1f, 5f)
-                        if (scale > 1f) {
-                            offsetX += pan.x
-                            offsetY += pan.y
-                        } else {
-                            offsetX = 0f
-                            offsetY = 0f
+                        coroutineScope.launch {
+                            val newScale = (scaleAnim.value * zoom).coerceIn(0.85f, 6.0f)
+                            scaleAnim.snapTo(newScale)
+
+                            if (newScale > 1f) {
+                                val (clampedX, clampedY) = clampOffsets(
+                                    newScale,
+                                    offsetXAnim.value + pan.x,
+                                    offsetYAnim.value + pan.y
+                                )
+                                offsetXAnim.snapTo(clampedX)
+                                offsetYAnim.snapTo(clampedY)
+                            } else {
+                                offsetXAnim.snapTo(0f)
+                                offsetYAnim.snapTo(0f)
+                            }
                         }
                     }
                 },
@@ -817,16 +914,16 @@ fun MediaItemContentViewer(
                 modifier = Modifier
                     .fillMaxSize()
                     .graphicsLayer(
-                        scaleX = scale,
-                        scaleY = scale,
-                        translationX = offsetX,
-                        translationY = offsetY
+                        scaleX = scaleAnim.value,
+                        scaleY = scaleAnim.value,
+                        translationX = offsetXAnim.value,
+                        translationY = offsetYAnim.value
                     )
                     .testTag("full_media_preview")
             )
 
-            // Overlay bounding boxes for YOLO objects and Faces
-            if (showBoundingBoxes && aiDetails != null && scale == 1f) {
+            // Overlay bounding boxes for YOLO objects and Faces (visible when in unzoomed state)
+            if (showBoundingBoxes && aiDetails != null && scaleAnim.value <= 1.05f) {
                 Canvas(modifier = Modifier.fillMaxSize()) {
                     val w = size.width
                     val h = size.height
@@ -859,6 +956,64 @@ fun MediaItemContentViewer(
                             size = Size(width, height),
                             style = Stroke(width = 4f)
                         )
+                    }
+                }
+            }
+
+            // Floating Zoom Inspection HUD Pill when zoomed in
+            AnimatedVisibility(
+                visible = scaleAnim.value > 1.05f,
+                enter = fadeIn(tween(200)),
+                exit = fadeOut(tween(200)),
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(16.dp)
+            ) {
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = SurfaceDark.copy(alpha = 0.90f)),
+                    shape = RoundedCornerShape(20.dp),
+                    modifier = Modifier
+                        .border(1.dp, CyanAccent.copy(alpha = 0.4f), RoundedCornerShape(20.dp))
+                        .testTag("zoom_level_hud")
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.ZoomIn,
+                            contentDescription = stringResource(R.string.pinch_to_zoom),
+                            tint = CyanAccent,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Text(
+                            text = "${(scaleAnim.value * 100).toInt()}%",
+                            color = TextPrimaryDark,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 12.sp
+                        )
+                        Box(
+                            modifier = Modifier
+                                .size(24.dp)
+                                .background(CyanAccent.copy(alpha = 0.2f), CircleShape)
+                                .clickable {
+                                    coroutineScope.launch {
+                                        launch { scaleAnim.animateTo(1f, tween(250, easing = FastOutSlowInEasing)) }
+                                        launch { offsetXAnim.animateTo(0f, tween(250, easing = FastOutSlowInEasing)) }
+                                        launch { offsetYAnim.animateTo(0f, tween(250, easing = FastOutSlowInEasing)) }
+                                    }
+                                }
+                                .testTag("reset_zoom_button"),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "1x",
+                                color = CyanAccent,
+                                fontWeight = FontWeight.ExtraBold,
+                                fontSize = 10.sp
+                            )
+                        }
                     }
                 }
             }

@@ -44,46 +44,74 @@ interface MediaDao {
     @Query("SELECT * FROM media_items WHERE id = :id LIMIT 1")
     suspend fun getMediaById(id: Long): MediaItemEntity?
 
-    @Query("SELECT DISTINCT m.* FROM media_items m LEFT JOIN ocr_text_results ocr ON m.id = ocr.mediaId WHERE m.fileName LIKE '%' || :query || '%' OR m.cameraModel LIKE '%' || :query || '%' OR ocr.extractedText LIKE '%' || :query || '%' ORDER BY m.dateTaken DESC")
-    fun searchMedia(query: String): Flow<List<MediaItemEntity>>
-
     @Query("""
-        SELECT DISTINCT m.* FROM media_items m
-        LEFT JOIN image_metadata meta ON m.id = meta.mediaId
-        LEFT JOIN image_classifications c ON m.id = c.mediaId
-        LEFT JOIN detected_objects o ON m.id = o.mediaId
-        LEFT JOIN ocr_text_results ocr ON m.id = ocr.mediaId
+        SELECT * FROM media_items m
         WHERE 
             (:query = '' OR (
                 m.fileName LIKE '%' || :query || '%' OR
-                m.cameraModel LIKE '%' || :query || '%' OR
+                m.filePath LIKE '%' || :query || '%' OR
                 m.cameraMake LIKE '%' || :query || '%' OR
-                m.iso LIKE '%' || :query || '%' OR
-                m.aperture LIKE '%' || :query || '%' OR
-                m.focalLength LIKE '%' || :query || '%' OR
-                meta.cameraMake LIKE '%' || :query || '%' OR
-                meta.cameraModel LIKE '%' || :query || '%' OR
-                meta.iso LIKE '%' || :query || '%' OR
-                meta.aperture LIKE '%' || :query || '%' OR
-                meta.focalLength LIKE '%' || :query || '%' OR
-                c.label LIKE '%' || :query || '%' OR
-                c.category LIKE '%' || :query || '%' OR
-                o.labelName LIKE '%' || :query || '%' OR
-                ocr.extractedText LIKE '%' || :query || '%'
+                m.cameraModel LIKE '%' || :query || '%' OR
+                m.id IN (SELECT mediaId FROM ocr_text_results WHERE extractedText LIKE '%' || :query || '%') OR
+                m.id IN (SELECT mediaId FROM image_classifications WHERE label LIKE '%' || :query || '%' OR category LIKE '%' || :query || '%') OR
+                m.id IN (SELECT mediaId FROM detected_objects WHERE labelName LIKE '%' || :query || '%') OR
+                m.id IN (SELECT mediaId FROM media_item_category_cross_ref WHERE categoryId LIKE '%' || :query || '%' OR (:categoryAlias != '' AND categoryId = :categoryAlias))
             ))
-            AND (:cameraModel IS NULL OR :cameraModel = '' OR m.cameraModel = :cameraModel OR meta.cameraModel = :cameraModel)
-            AND (:cameraMake IS NULL OR :cameraMake = '' OR m.cameraMake = :cameraMake OR meta.cameraMake = :cameraMake)
-            AND (:mlCategory IS NULL OR :mlCategory = '' OR c.category LIKE '%' || :mlCategory || '%')
-            AND (:mlLabel IS NULL OR :mlLabel = '' OR c.label LIKE '%' || :mlLabel || '%' OR o.labelName LIKE '%' || :mlLabel || '%')
-            AND (:gpsOnly = 0 OR (m.latitude IS NOT NULL AND m.longitude IS NOT NULL) OR (meta.latitude IS NOT NULL AND meta.longitude IS NOT NULL))
+        ORDER BY m.dateTaken DESC
+    """)
+    fun searchMedia(query: String, categoryAlias: String = ""): Flow<List<MediaItemEntity>>
+
+    @Query("""
+        SELECT * FROM media_items m
+        WHERE 
+            (:query = '' OR (
+                m.fileName LIKE '%' || :query || '%' OR
+                m.filePath LIKE '%' || :query || '%' OR
+                m.cameraMake LIKE '%' || :query || '%' OR
+                m.cameraModel LIKE '%' || :query || '%' OR
+                m.id IN (SELECT mediaId FROM ocr_text_results WHERE extractedText LIKE '%' || :query || '%') OR
+                m.id IN (SELECT mediaId FROM image_classifications WHERE label LIKE '%' || :query || '%' OR category LIKE '%' || :query || '%') OR
+                m.id IN (SELECT mediaId FROM detected_objects WHERE labelName LIKE '%' || :query || '%') OR
+                m.id IN (SELECT mediaId FROM media_item_category_cross_ref WHERE categoryId LIKE '%' || :query || '%' OR (:categoryAlias != '' AND categoryId = :categoryAlias))
+            ))
+            AND (:cameraModel IS NULL OR :cameraModel = '' OR m.cameraModel = :cameraModel)
+            AND (:cameraMake IS NULL OR :cameraMake = '' OR m.cameraMake = :cameraMake)
+            AND (:mlCategory IS NULL OR :mlCategory = '' OR m.id IN (SELECT mediaId FROM image_classifications WHERE category LIKE '%' || :mlCategory || '%'))
+            AND (:mlLabel IS NULL OR :mlLabel = '' OR m.id IN (SELECT mediaId FROM image_classifications WHERE label LIKE '%' || :mlLabel || '%') OR m.id IN (SELECT mediaId FROM detected_objects WHERE labelName LIKE '%' || :mlLabel || '%'))
+            AND (:categoryId IS NULL OR :categoryId = '' OR m.id IN (SELECT mediaId FROM media_item_category_cross_ref WHERE categoryId = :categoryId))
+            AND (:categoryIdsCount = 0 OR m.id IN (SELECT mediaId FROM media_item_category_cross_ref WHERE categoryId IN (:categoryIds)))
+            AND (:isVideo IS NULL OR m.isVideo = :isVideo)
+            AND (:isFavorite IS NULL OR m.isFavorite = :isFavorite)
+            AND (:minDateMs IS NULL OR (CASE WHEN m.dateTaken > 0 THEN m.dateTaken ELSE m.dateModified END) >= :minDateMs)
+            AND (:maxDateMs IS NULL OR (CASE WHEN m.dateTaken > 0 THEN m.dateTaken ELSE m.dateModified END) <= :maxDateMs)
+            AND (:minSizeBytes IS NULL OR m.sizeBytes >= :minSizeBytes)
+            AND (:maxSizeBytes IS NULL OR m.sizeBytes <= :maxSizeBytes)
+            AND (:minPixels IS NULL OR (m.width * m.height) >= :minPixels)
+            AND (:maxPixels IS NULL OR (m.width * m.height) <= :maxPixels)
+            AND (:extensionsCount = 0 OR UPPER(SUBSTR(m.fileName, -3)) IN (:extensions) OR UPPER(SUBSTR(m.fileName, -4)) IN (:extensions))
+            AND (:gpsOnly = 0 OR (m.latitude IS NOT NULL AND m.longitude IS NOT NULL))
         ORDER BY m.dateTaken DESC
     """)
     fun searchMediaAdvanced(
         query: String = "",
+        categoryAlias: String = "",
         cameraModel: String? = null,
         cameraMake: String? = null,
         mlCategory: String? = null,
         mlLabel: String? = null,
+        categoryId: String? = null,
+        categoryIds: List<String> = emptyList(),
+        categoryIdsCount: Int = 0,
+        isVideo: Boolean? = null,
+        isFavorite: Boolean? = null,
+        minDateMs: Long? = null,
+        maxDateMs: Long? = null,
+        minSizeBytes: Long? = null,
+        maxSizeBytes: Long? = null,
+        minPixels: Long? = null,
+        maxPixels: Long? = null,
+        extensions: List<String> = emptyList(),
+        extensionsCount: Int = 0,
         gpsOnly: Int = 0
     ): Flow<List<MediaItemEntity>>
 
@@ -137,6 +165,12 @@ interface MediaDao {
 
     @Query("DELETE FROM media_items WHERE id = :id")
     suspend fun deleteById(id: Long)
+
+    @Query("DELETE FROM media_items WHERE id IN (:ids)")
+    suspend fun deleteByIds(ids: List<Long>)
+
+    @Query("SELECT * FROM media_items WHERE id IN (:ids)")
+    suspend fun getMediaByIds(ids: List<Long>): List<MediaItemEntity>
 
     @Query("DELETE FROM media_items")
     suspend fun clearAll()

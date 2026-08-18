@@ -85,14 +85,45 @@ data class MediaItemWithAi(
     val duplicateGroupId: String? = null
 )
 
+enum class DateFilterOption {
+    ALL, TODAY, LAST_7_DAYS, LAST_30_DAYS, THIS_YEAR, CUSTOM
+}
+
+enum class FileSizeFilterOption {
+    ALL, LESS_THAN_1MB, BETWEEN_1_5MB, BETWEEN_5_50MB, GREATER_THAN_50MB
+}
+
+enum class DimensionFilterOption {
+    ALL, SMALL, MEDIUM, HIGH_RES
+}
+
 data class SearchFilterState(
     val query: String = "",
     val cameraModel: String? = null,
     val cameraMake: String? = null,
     val mlCategory: String? = null,
     val mlLabel: String? = null,
+    val categoryId: String? = null,
+    val selectedCategoryIds: Set<String> = if (!categoryId.isNullOrBlank()) setOf(categoryId) else emptySet(),
+    val isVideo: Boolean? = null,
+    val isFavorite: Boolean? = null,
+    val dateFilterOption: DateFilterOption = DateFilterOption.ALL,
+    val startDateMs: Long? = null,
+    val endDateMs: Long? = null,
+    val fileSizeOption: FileSizeFilterOption = FileSizeFilterOption.ALL,
+    val selectedExtensions: Set<String> = emptySet(),
+    val dimensionOption: DimensionFilterOption = DimensionFilterOption.ALL,
     val isGpsOnly: Boolean = false
 ) {
+    val allSelectedCategories: Set<String>
+        get() {
+            val result = selectedCategoryIds.toMutableSet()
+            if (!categoryId.isNullOrBlank()) {
+                result.add(categoryId)
+            }
+            return result
+        }
+
     val activeFilterCount: Int
         get() {
             var count = 0
@@ -101,12 +132,21 @@ data class SearchFilterState(
             if (!cameraMake.isNullOrBlank()) count++
             if (!mlCategory.isNullOrBlank()) count++
             if (!mlLabel.isNullOrBlank()) count++
+            if (allSelectedCategories.isNotEmpty()) count += allSelectedCategories.size
+            if (isVideo != null) count++
+            if (isFavorite != null) count++
+            if (dateFilterOption != DateFilterOption.ALL) count++
+            if (fileSizeOption != FileSizeFilterOption.ALL) count++
+            if (selectedExtensions.isNotEmpty()) count += selectedExtensions.size
+            if (dimensionOption != DimensionFilterOption.ALL) count++
             if (isGpsOnly) count++
             return count
         }
 
     val hasActiveFilters: Boolean
         get() = activeFilterCount > 0
+
+    fun clearAll(): SearchFilterState = SearchFilterState()
 }
 
 data class SearchFilterOptions(

@@ -3,6 +3,7 @@ package com.omex.gallery.ui.feature_search
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,18 +21,27 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FilterAltOff
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.TextFields
+import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.InputChip
@@ -46,6 +56,9 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -60,8 +73,30 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.omex.gallery.R
+import com.omex.gallery.core.search.SmartSearchHelper
+import com.omex.gallery.ui.feature_gallery.components.ActiveFiltersRow
+import com.omex.gallery.ui.feature_gallery.components.AdvancedFilterBottomSheet
 import com.omex.gallery.ui.theme.AmberAccent
 import com.omex.gallery.ui.theme.ObsidianBg
+
+private data class CategoryChipItem(
+    val id: String,
+    val labelAr: String,
+    val iconEmoji: String
+)
+
+private val smartCategoryChips = listOf(
+    CategoryChipItem("TRADING", "تداول", "📈"),
+    CategoryChipItem("PRODUCT", "منتجات", "🛍️"),
+    CategoryChipItem("DOCUMENT", "مستندات", "📄"),
+    CategoryChipItem("CAR", "سيارات", "🚗"),
+    CategoryChipItem("FOOD", "طعام", "🍔"),
+    CategoryChipItem("NATURE", "طبيعة", "🏔️"),
+    CategoryChipItem("TRAVEL", "سفر", "✈️"),
+    CategoryChipItem("PERSON", "أشخاص", "👤"),
+    CategoryChipItem("WORK", "عمل", "💼"),
+    CategoryChipItem("SCREENSHOT", "لقطات شاشة", "📱")
+)
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -72,8 +107,19 @@ fun SearchScreen(
     modifier: Modifier = Modifier
 ) {
     val query by viewModel.searchQuery.collectAsStateWithLifecycle()
+    val selectedMediaTab by viewModel.selectedMediaTab.collectAsStateWithLifecycle()
+    val selectedCategory by viewModel.selectedCategory.collectAsStateWithLifecycle()
+    val searchFilterState by viewModel.searchFilterState.collectAsStateWithLifecycle()
+    val categories by viewModel.categories.collectAsStateWithLifecycle()
     val recentQueries by viewModel.recentQueries.collectAsStateWithLifecycle()
     val searchResults by viewModel.searchResults.collectAsStateWithLifecycle()
+
+    var showAdvancedFiltersBottomSheet by remember { mutableStateOf(false) }
+
+    val hasActiveFilters = query.isNotBlank() ||
+            selectedMediaTab != SearchMediaTab.ALL ||
+            selectedCategory != null ||
+            searchFilterState.hasActiveFilters
 
     Scaffold(
         topBar = {
@@ -94,6 +140,48 @@ fun SearchScreen(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = stringResource(R.string.back)
                         )
+                    }
+                },
+                actions = {
+                    // Open Advanced Filters BottomSheet Button with Badge
+                    IconButton(
+                        onClick = { showAdvancedFiltersBottomSheet = true },
+                        modifier = Modifier.testTag("search_open_filters_button")
+                    ) {
+                        BadgedBox(
+                            badge = {
+                                if (searchFilterState.hasActiveFilters) {
+                                    Badge(
+                                        containerColor = AmberAccent,
+                                        contentColor = ObsidianBg
+                                    ) {
+                                        Text("${searchFilterState.activeFilterCount}")
+                                    }
+                                }
+                            }
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Tune,
+                                contentDescription = stringResource(R.string.filters_title),
+                                tint = if (searchFilterState.hasActiveFilters) AmberAccent else Color.White
+                            )
+                        }
+                    }
+
+                    if (hasActiveFilters) {
+                        IconButton(
+                            onClick = {
+                                viewModel.onQueryChange("")
+                                viewModel.clearFilters()
+                            },
+                            modifier = Modifier.testTag("clear_all_search_filters_button")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.FilterAltOff,
+                                contentDescription = stringResource(R.string.clear_filters),
+                                tint = AmberAccent
+                            )
+                        }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -120,7 +208,9 @@ fun SearchScreen(
                     Text(
                         stringResource(R.string.search_placeholder_text_ocr),
                         color = Color.Gray,
-                        fontSize = 14.sp
+                        fontSize = 13.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 },
                 leadingIcon = {
@@ -159,10 +249,119 @@ fun SearchScreen(
                     .testTag("search_input_field")
             )
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(10.dp))
 
-            // Recent Searches Chips section when query is empty
-            AnimatedVisibility(visible = query.isBlank() && recentQueries.isNotEmpty()) {
+            // Media Type Filter Row (All, Photos, Videos, Favorites)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                FilterChip(
+                    selected = selectedMediaTab == SearchMediaTab.ALL,
+                    onClick = { viewModel.onMediaTabSelect(SearchMediaTab.ALL) },
+                    label = { Text("الكل", fontSize = 12.sp) },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = AmberAccent,
+                        selectedLabelColor = Color.Black,
+                        containerColor = Color(0xFF1E1E24),
+                        labelColor = Color.LightGray
+                    ),
+                    shape = RoundedCornerShape(16.dp),
+                    modifier = Modifier.testTag("filter_tab_all")
+                )
+                FilterChip(
+                    selected = selectedMediaTab == SearchMediaTab.PHOTOS,
+                    onClick = { viewModel.onMediaTabSelect(SearchMediaTab.PHOTOS) },
+                    label = { Text("📷 صور", fontSize = 12.sp) },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = AmberAccent,
+                        selectedLabelColor = Color.Black,
+                        containerColor = Color(0xFF1E1E24),
+                        labelColor = Color.LightGray
+                    ),
+                    shape = RoundedCornerShape(16.dp),
+                    modifier = Modifier.testTag("filter_tab_photos")
+                )
+                FilterChip(
+                    selected = selectedMediaTab == SearchMediaTab.VIDEOS,
+                    onClick = { viewModel.onMediaTabSelect(SearchMediaTab.VIDEOS) },
+                    label = { Text("🎬 فيديوهات", fontSize = 12.sp) },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = AmberAccent,
+                        selectedLabelColor = Color.Black,
+                        containerColor = Color(0xFF1E1E24),
+                        labelColor = Color.LightGray
+                    ),
+                    shape = RoundedCornerShape(16.dp),
+                    modifier = Modifier.testTag("filter_tab_videos")
+                )
+                FilterChip(
+                    selected = selectedMediaTab == SearchMediaTab.FAVORITES,
+                    onClick = { viewModel.onMediaTabSelect(SearchMediaTab.FAVORITES) },
+                    label = { Text("⭐ المفضلة", fontSize = 12.sp) },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = AmberAccent,
+                        selectedLabelColor = Color.Black,
+                        containerColor = Color(0xFF1E1E24),
+                        labelColor = Color.LightGray
+                    ),
+                    shape = RoundedCornerShape(16.dp),
+                    modifier = Modifier.testTag("filter_tab_favorites")
+                )
+            }
+
+            Spacer(modifier = Modifier.height(6.dp))
+
+            // AI Smart Categories Horizontal Chips
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                smartCategoryChips.forEach { cat ->
+                    val isSelected = selectedCategory == cat.id
+                    FilterChip(
+                        selected = isSelected,
+                        onClick = { viewModel.onCategorySelect(cat.id) },
+                        label = {
+                            Text(
+                                text = "${cat.iconEmoji} ${cat.labelAr}",
+                                fontSize = 12.sp
+                            )
+                        },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = Color(0xFFD97706),
+                            selectedLabelColor = Color.White,
+                            containerColor = Color(0xFF24242C),
+                            labelColor = Color(0xFFCCCCCC)
+                        ),
+                        shape = RoundedCornerShape(14.dp),
+                        modifier = Modifier.testTag("filter_category_${cat.id}")
+                    )
+                }
+            }
+
+            // Active Filters Row (Phase 2)
+            ActiveFiltersRow(
+                filterState = searchFilterState,
+                categories = categories,
+                onRemoveCategory = { viewModel.removeCategoryFilter(it) },
+                onRemoveMediaType = { viewModel.removeMediaTypeFilter() },
+                onRemoveFavorite = { viewModel.removeFavoriteFilter() },
+                onRemoveDate = { viewModel.removeDateFilter() },
+                onRemoveFileSize = { viewModel.removeFileSizeFilter() },
+                onRemoveExtension = { viewModel.removeExtensionFilter(it) },
+                onRemoveDimension = { viewModel.removeDimensionFilter() },
+                onClearAll = { viewModel.clearFilters() }
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Recent Searches section when query is empty and no category is selected
+            AnimatedVisibility(visible = !hasActiveFilters && recentQueries.isNotEmpty()) {
                 Column(modifier = Modifier.fillMaxWidth()) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -196,7 +395,7 @@ fun SearchScreen(
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(6.dp))
 
                     FlowRow(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -226,14 +425,19 @@ fun SearchScreen(
                             )
                         }
                     }
+
+                    Spacer(modifier = Modifier.height(16.dp))
                 }
             }
 
-            // Results count header
-            if (query.isNotBlank()) {
+            // Results count header when search is active
+            if (hasActiveFilters) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(vertical = 8.dp)
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 6.dp)
                 ) {
                     Text(
                         text = stringResource(R.string.search_results_count, searchResults.size),
@@ -241,11 +445,20 @@ fun SearchScreen(
                         fontWeight = FontWeight.Bold,
                         fontSize = 14.sp
                     )
+
+                    if (selectedCategory != null) {
+                        Text(
+                            text = "#${SmartSearchHelper.getCategoryNameArabic(selectedCategory!!)}",
+                            color = Color(0xFFFBBF24),
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
                 }
             }
 
             // Empty state when search produces no results
-            if (query.isNotBlank() && searchResults.isEmpty()) {
+            if (hasActiveFilters && searchResults.isEmpty()) {
                 Box(
                     contentAlignment = Alignment.Center,
                     modifier = Modifier
@@ -257,13 +470,51 @@ fun SearchScreen(
                             imageVector = Icons.Default.Search,
                             contentDescription = null,
                             tint = Color.Gray,
+                            modifier = Modifier.size(56.dp)
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text(
+                            text = if (query.isNotBlank()) stringResource(R.string.no_ocr_results_found, query)
+                            else stringResource(R.string.no_matches_filters),
+                            color = Color.LightGray,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = stringResource(R.string.search_empty_hint),
+                            color = Color.Gray,
+                            fontSize = 12.sp
+                        )
+                    }
+                }
+            } else if (!hasActiveFilters && recentQueries.isEmpty()) {
+                // Initial prompt when screen opens
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(32.dp)
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Icon(
+                            imageVector = Icons.Default.Search,
+                            contentDescription = null,
+                            tint = Color.DarkGray,
                             modifier = Modifier.size(64.dp)
                         )
-                        Spacer(modifier = Modifier.height(16.dp))
+                        Spacer(modifier = Modifier.height(12.dp))
                         Text(
-                            text = stringResource(R.string.no_ocr_results_found, query),
+                            text = "ابحث بالاسم، OCR، الكاميرا، أو اختر فئة ذكية",
                             color = Color.LightGray,
-                            fontSize = 14.sp
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = "يدعم البحث الفوري عن التداول، المنتجات، المستندات، والسيارات",
+                            color = Color.Gray,
+                            fontSize = 12.sp
                         )
                     }
                 }
@@ -284,6 +535,18 @@ fun SearchScreen(
                     }
                 }
             }
+        }
+
+        if (showAdvancedFiltersBottomSheet) {
+            AdvancedFilterBottomSheet(
+                currentFilterState = searchFilterState,
+                categories = categories,
+                matchingCount = searchResults.size,
+                onApplyFilters = { newState ->
+                    viewModel.setFilterState(newState)
+                },
+                onDismiss = { showAdvancedFiltersBottomSheet = false }
+            )
         }
     }
 }
@@ -311,7 +574,7 @@ private fun SearchResultCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .aspectRatio(1f)
-                    .background(Color.DarkGray)
+                    .background(Color(0xFF2A2A32))
             ) {
                 AsyncImage(
                     model = media.thumbnailPath ?: media.uriString,
@@ -320,6 +583,54 @@ private fun SearchResultCard(
                     modifier = Modifier.fillMaxSize()
                 )
 
+                // Favorite Icon badge
+                if (media.isFavorite) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .padding(6.dp)
+                            .clip(CircleShape)
+                            .background(Color.Black.copy(alpha = 0.6f))
+                            .padding(4.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Favorite,
+                            contentDescription = null,
+                            tint = Color.Red,
+                            modifier = Modifier.size(12.dp)
+                        )
+                    }
+                }
+
+                // Video Badge
+                if (media.isVideo) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.BottomStart)
+                            .padding(6.dp)
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(Color.Black.copy(alpha = 0.7f))
+                            .padding(horizontal = 5.dp, vertical = 2.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.PlayArrow,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(12.dp)
+                            )
+                            Spacer(modifier = Modifier.width(2.dp))
+                            Text(
+                                text = "فيديو",
+                                color = Color.White,
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
+
+                // OCR Badge
                 if (ocrText.isNotBlank()) {
                     Box(
                         modifier = Modifier
@@ -357,6 +668,28 @@ private fun SearchResultCard(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
+
+                // Matched Categories or Camera Model
+                if (result.matchedCategories.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = result.matchedCategories.joinToString(" ") { "#${SmartSearchHelper.getCategoryNameArabic(it)}" },
+                        color = Color(0xFFFBBF24),
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                } else if (!media.cameraModel.isNullOrBlank()) {
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = "📷 ${media.cameraModel}",
+                        color = Color.Gray,
+                        fontSize = 10.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
 
                 if (ocrText.isNotBlank()) {
                     Spacer(modifier = Modifier.height(4.dp))

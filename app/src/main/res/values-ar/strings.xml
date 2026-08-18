@@ -95,4 +95,120 @@
     <string name="cat_nature">طبيعة</string>
     <string name="cat_fish">سمك</string>
     <string name="cat_object">عنصر</string>
+
+    <!-- Intelligent Global Search Strings -->
+    <string name="search_title">البحث الذكي الشامل</string>
+    <string name="search_placeholder_text_ocr">ابحث باسم الملف، نصوص OCR، الكاميرا، أو الفئات...</string>
+    <string name="recent_searches_header">عمليات البحث الأخيرة</string>
+    <string name="clear_all">مسح الكل</string>
+    <string name="search_results_count">نتائج البحث (%1$d)</string>
+    <string name="no_ocr_results_found">لم يتم العثور على نتائج تطابق "%1$s"</string>
+    <string name="search_empty_hint">جرب البحث باسم الملف، النصوص داخل الصور، بيانات الكاميرا، أو الفئات الذكية مثل التداول والمنتجات.</string>
+    <string name="ocr_text_extracted">النص المستخرج (OCR)</string>
+    <string name="search_filter_trading">تداول</string>
+    <string name="search_filter_products">منتجات</string>
+    <string name="search_filter_documents">مستندات</string>
+    <string name="search_filter_cars">سيارات</string>
+    <string name="search_filter_food">طعام</string>
+    <string name="search_filter_nature">طبيعة</string>
+    <string name="search_filter_travel">سفر</string>
+    <string name="search_filter_people">أشخاص</string>
+    <string name="search_filter_work">عمل</string>
+    <string name="search_filter_screenshots">لقطات شاشة</string>
+
+    <!-- Selection Mode & Batch Delete -->
+    <string name="selection_mode_title">%1$d عنصر محدد</string>
+    <string name="select_all">تحديد الكل</string>
+    <string name="deselect_all">إلغاء التحديد</string>
+    <string name="delete_selected">حذف المحدد</string>
+    <string name="favorite_selected">إضافة للمفضلة</string>
+    <string name="batch_delete_dialog_title">حذف %1$d عنصر؟</string>
+    <string name="batch_delete_dialog_msg">سيتم حذف هذه العناصر نهائياً من المعرض وذاكرة الجهاز. لا يمكن التراجع عن هذا الإجراء.</string>
+    <string name="delete_confirm">حذف</string>
+    <string name="cancel">إلغاء</string>
+    <string name="items_deleted_success">تم حذف %1$d عنصر بنجاح</string>
+
+    <!-- Storage Analyzer Strings -->
+    <string name="storage_analyzer_title">محلل التخزين الذكي</string>
+    <string name="storage_analyzer_subtitle">تحليل استهلاك المساحة وتوزيع الملفات والتصنيفات</string>
+    <string name="storage_total_used">إجمالي المساحة المستخدمة</string>
+    <string name="storage_total_items">إجمالي الوسائط</string>
+    <string name="storage_photos_size">الصور</string>
+    <string name="storage_videos_size">الفيديوهات</string>
+    <string name="storage_duplicates_size">تكرارات قابلة للتحرير</string>
+    <string name="storage_group_format">حسب صيغة الملف</string>
+    <string name="storage_group_category">حسب التصنيف الذكي</string>
+    <string name="storage_group_media_type">حسب نوع الوسائط</string>
+    <string name="storage_metric_size">حسب الحجم</string>
+    <string name="storage_metric_count">حسب العدد</string>
+    <string name="storage_chart_title">مخطط D3 التفاعلي لتوزيع التخزين</string>
+    <string name="storage_chart_interactive_hint">المس أي قطاع في الرسم البياني لتصفية الملفات التابعة له</string>
+    <string name="storage_distribution_breakdown">تفصيل استهلاك المساحة</string>
+    <string name="storage_largest_files">الملفات الأكثر استهلاكاً للمساحة</string>
+    <string name="storage_quick_clean">اقتراحات تنظيف المساحة</string>
+    <string name="storage_filter_all">الكل</string>
+    <string name="storage_filter_large_videos">فيديوهات كبيرة (&gt;50MB)</string>
+    <string name="storage_filter_duplicates">الملفات المكررة</string>
+    <string name="storage_filter_screenshots">لقطات الشاشة</string>
+    <string name="storage_filter_large_photos">صور كبيرة (&gt;5MB)</string>
+    <string name="storage_clean_duplicates_btn">تنظيف النسخ المكررة</string>
+    <string name="storage_no_items_filter">لا توجد ملفات وسائط مطابقة للفلتر المحدد</string>
+    <string name="storage_reclaim_space">تحرير مساحة</string>
+    <string name="storage_delete_single_confirm">حذف هذا الملف نهائياً لتحرير %1$s؟</string>
+    <string name="storage_batch_delete_confirm">حذف %1$d ملف لتحرير %2$s من المساحة؟</string>
+
+    <!-- Privacy Report & Offline AI Transparency Strings -->
+    <string name="privacy_report_title">تقرير الخصوصية والوصول للوسائط</string>
+    <string name="privacy_report_subtitle">سجل تدقيق وشفافية الذكاء الاصطناعي المحلي دون إنترنت بنسبة 100%</string>
+    <string name="privacy_report_button">تقرير الخصوصية</string>
+    <string name="privacy_100_local_title">معمارية ذكاء اصطناعي محلية 100% على الجهاز</string>
+    <string name="privacy_100_local_subtitle">جميع التصنيفات، البصمات البصرية والهاش تُعالج وتُخزن محلياً داخل هاتفك فقط</string>
+    <string name="privacy_on_device_ai_analyzed">وسائط تم فحصها محلياً</string>
+    <string name="privacy_cloud_upload_stat">تسريب بيانات للسحابة</string>
+    <string name="privacy_sandbox_isolated">بيئة معزولة بالكامل</string>
+    <string name="privacy_audit_filter_title">تصفية سجلات الوصول</string>
+    <string name="privacy_filter_all">كافة العمليات</string>
+    <string name="privacy_filter_offline_ai">محركات الذكاء الاصطناعي</string>
+    <string name="privacy_filter_internal">العمليات الداخلية</string>
+    <string name="privacy_filter_external">النظام والتطبيقات</string>
+    <string name="privacy_recent_access_logs">سجل الوصول الأخير للوسائط المحلية</string>
+    <string name="privacy_access_entries">عملية مسجلة</string>
+    <string name="privacy_offline_promise_title">ضمان الخصوصية التامة دون اتصال سحابي</string>
+    <string name="privacy_offline_promise_desc">يستخدم OMEX Gallery شبكات عصبية محلية مدمجة (TensorFlow Lite) وتقنيات التجزئة الإدراكية (DCT pHash). صورك الخاصة ولقطات الشاشة ومقاطع الفيديو لا تغادر حدود ذاكرة جهازك على الإطلاق.</string>
+    <!-- Duplicate Media Detection & Hash Cleaner Strings -->
+    <string name="duplicate_finder_title">كاشف الوسائط والملفات المكررة</string>
+    <string name="duplicate_finder_subtitle">فحص بصمات الهاش التشفيرية (SHA-256) والإدراكية البصرية</string>
+    <string name="duplicate_none_found_title">لم يتم العثور على وسائط مكررة</string>
+    <string name="duplicate_none_found_desc">جميع صورك ومقاطع الفيديو لديك فريدة تماماً ولا توجد نسخ زائدة تستهلك سعة التخزين.</string>
+    <string name="duplicate_detected_groups">مجموعات التطابق</string>
+    <string name="duplicate_selected_to_remove">ملف محدد للتنظيف</string>
+    <string name="duplicate_hash_engine_title">محرك كشف التطابق بالهاش التشفيري والإدراكي</string>
+    <string name="duplicate_hash_engine_subtitle">يكتشف الملفات المتطابقة بايت-ببايت (SHA-256) والصور المكررة بصرياً (dHash/pHash)</string>
+    <string name="duplicate_groups_stat">مجموعات مكتشفة</string>
+    <string name="duplicate_redundant_files_stat">نسخ مكررة زائدة</string>
+    <string name="duplicate_reclaimable_space_stat">مساحة قابلة للاسترداد</string>
+    <string name="duplicate_auto_clean_button">تنظيف كافة النسخ المكررة (%1$s)</string>
+    <string name="duplicate_clean_group_title">تنظيف تكرارات هذه المجموعة</string>
+    <string name="duplicate_clean_group_confirm">حذف %1$d نسخة مكررة زائدة واسترجاع %2$s من الذاكرة؟ (سيتم الاحتفاظ بالملف الأصلي الأعلى جودة)</string>
+    <string name="duplicate_clean_all_title">تنظيف كافة الوسائط المكررة</string>
+    <string name="duplicate_clean_all_confirm">هل أنت متأكد من حذف %1$d نسخة مكررة واسترجاع %2$s؟ (سيتم الاحتفاظ بنسخة أصلية واحدة من كل مجموعة بأمان)</string>
+    <!-- Zoom Gestures & Inspection Strings -->
+    <string name="zoom_level">تكبير %1$d%%</string>
+    <string name="zoom_reset">إعادة الضبط (1x)</string>
+    <string name="double_tap_to_zoom">انقر مرتين للتكبير</string>
+    <string name="pinch_to_zoom">قرص للتكبير</string>
+    <!-- AI Suggestions Strings -->
+    <string name="ai_suggestions_title">اقتراحات الذكاء الاصطناعي</string>
+    <string name="ai_suggestions_subtitle">ألبومات ذكية مقترحة استناداً لتصنيفات الـ ML المحلية</string>
+    <string name="ai_suggestions_count">%1$d ألبومات مقترحة</string>
+    <string name="ai_suggestions_explore">استعراض الألبوم</string>
+    <string name="ai_suggestions_create_album">حفظ كألبوم</string>
+    <string name="ai_suggestions_create_all">إنشاء كافة الألبومات المقترحة</string>
+    <string name="ai_suggestions_dismiss">تجاهل</string>
+    <string name="ai_suggestions_photos_count">%1$d صورة</string>
+    <string name="ai_suggestions_confidence">تطابق %1$d%%</string>
+    <string name="ai_suggestions_active_banner">ألبوم الذكاء الاصطناعي: %1$s • %2$d صورة مجمعة بتصنيفات الـ ML</string>
+    <string name="ai_suggestions_album_badge">ألبوم ذكي</string>
+    <string name="ai_suggestions_hide">إخفاء الاقتراحات</string>
+    <string name="ai_suggestions_show">إظهار الاقتراحات</string>
 </resources>

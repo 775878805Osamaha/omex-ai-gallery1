@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>OMEX D3 Storage Analyzer</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+            -webkit-user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+        body {
+            background-color: transparent;
+            color: #E2E8F0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+        }
+        #chart-container {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        svg {
+            width: 100%;
+            height: 100%;
+            max-width: 380px;
+            max-height: 380px;
+            overflow: visible;
+        }
+        .slice {
+            cursor: pointer;
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease, filter 0.3s ease;
+            transform-origin: 200px 200px;
+        }
+        .slice:hover, .slice.active {
+            transform: scale(1.05);
+            filter: drop-shadow(0 0 10px rgba(0, 229, 255, 0.5));
+            opacity: 1 !important;
+        }
+        .slice.dimmed {
+            opacity: 0.35;
+        }
+        .center-text-title {
+            fill: #FFFFFF;
+            font-size: 20px;
+            font-weight: 800;
+            text-anchor: middle;
+            dominant-baseline: middle;
+            font-family: inherit;
+        }
+        .center-text-subtitle {
+            fill: #94A3B8;
+            font-size: 11px;
+            font-weight: 600;
+            text-anchor: middle;
+            dominant-baseline: middle;
+            letter-spacing: 0.5px;
+        }
+        .center-text-percent {
+            fill: #00E5FF;
+            font-size: 12px;
+            font-weight: 700;
+            text-anchor: middle;
+            dominant-baseline: middle;
+        }
+        .center-circle {
+            fill: #141A29;
+            stroke: rgba(255, 255, 255, 0.08);
+            stroke-width: 1.5;
+            cursor: pointer;
+        }
+        .pulse-ring {
+            animation: pulse 2.5s infinite;
+            transform-origin: 200px 200px;
+        }
+        @keyframes pulse {
+            0% { transform: scale(0.98); opacity: 0.8; }
+            50% { transform: scale(1.02); opacity: 0.3; }
+            100% { transform: scale(0.98); opacity: 0.8; }
+        }
+    </style>
+</head>
+<body>
+    <div id="chart-container">
+        <svg id="d3-svg" viewBox="0 0 400 400">
+            <defs>
+                <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+                    <feGaussianBlur stdDeviation="4" result="blur" />
+                    <feComposite in="SourceGraphic" in2="blur" operator="over" />
+                </filter>
+            </defs>
+            <g id="chart-group" transform="translate(200, 200)"></g>
+            <circle class="center-circle" cx="200" cy="200" r="75" onclick="resetSelection()"></circle>
+            <text id="center-title" class="center-text-title" x="200" y="190">0 MB</text>
+            <text id="center-subtitle" class="center-text-subtitle" x="200" y="212">TOTAL STORAGE</text>
+            <text id="center-percent" class="center-text-percent" x="200" y="228"></text>
+        </svg>
+    </div>
+
+    <script>
+        let currentData = [];
+        let currentMode = "BY_FILE_TYPE";
+        let currentMetric = "SIZE";
+        let selectedKey = null;
+        let totalValue = 0;
+        let formattedTotal = "0 MB";
+
+        function formatBytes(bytes) {
+            if (!bytes || bytes <= 0) return "0 B";
+            const k = 1024;
+            const sizes = ["B", "KB", "MB", "GB", "TB"];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i];
+        }
+
+        function formatCount(count) {
+            return (count || 0).toLocaleString();
+        }
+
+        // Native offline D3 SVG pie & arc mathematical generator
+        function renderDonutChart(data, totalFormatted) {
+            const group = document.getElementById("chart-group");
+            group.innerHTML = "";
+            currentData = data || [];
+            formattedTotal = totalFormatted || "0 MB";
+
+            if (!currentData || currentData.length === 0) {
+                document.getElementById("center-title").textContent = "0 B";
+                document.getElementById("center-subtitle").textContent = "NO DATA";
+                document.getElementById("center-percent").textContent = "";
+                return;
+            }
+
+            totalValue = currentData.reduce((acc, item) => {
+                const val = currentMetric === "SIZE" ? (item.sizeBytes || 0) : (item.count || 0);
+                return acc + val;
+            }, 0);
+
+            if (totalValue <= 0) {
+                document.getElementById("center-title").textContent = "0 B";
+                document.getElementById("center-subtitle").textContent = "EMPTY";
+                document.getElementById("center-percent").textContent = "";
+                return;
+            }
+
+            updateCenterText(null);
+
+            const outerRadius = 150;
+            const innerRadius = 88;
+            let startAngle = 0;
+
+            currentData.forEach((item, index) => {
+                const val = currentMetric === "SIZE" ? (item.sizeBytes || 0) : (item.count || 0);
+                if (val <= 0) return;
+
+                const angleFraction = val / totalValue;
+                const sweepAngle = angleFraction * 2 * Math.PI;
+                const endAngle = startAngle + sweepAngle;
+
+                // Build SVG Arc Path
+                const x1_out = outerRadius * Math.cos(startAngle - Math.PI / 2);
+                const y1_out = outerRadius * Math.sin(startAngle - Math.PI / 2);
+                const x2_out = outerRadius * Math.cos(endAngle - Math.PI / 2);
+                const y2_out = outerRadius * Math.sin(endAngle - Math.PI / 2);
+
+                const x1_in = innerRadius * Math.cos(endAngle - Math.PI / 2);
+                const y1_in = innerRadius * Math.sin(endAngle - Math.PI / 2);
+                const x2_in = innerRadius * Math.cos(startAngle - Math.PI / 2);
+                const y2_in = innerRadius * Math.sin(startAngle - Math.PI / 2);
+
+                const largeArc = sweepAngle > Math.PI ? 1 : 0;
+
+                const d = `
+                    M ${x1_out} ${y1_out}
+                    A ${outerRadius} ${outerRadius} 0 ${largeArc} 1 ${x2_out} ${y2_out}
+                    L ${x1_in} ${y1_in}
+                    A ${innerRadius} ${innerRadius} 0 ${largeArc} 0 ${x2_in} ${y2_in}
+                    Z
+                `;
+
+                const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+                path.setAttribute("d", d);
+                path.setAttribute("fill", item.colorHex || "#00E5FF");
+                path.setAttribute("stroke", "#0B0F19");
+                path.setAttribute("stroke-width", "2");
+                path.setAttribute("class", "slice");
+                path.setAttribute("id", "slice-" + item.key);
+
+                if (selectedKey) {
+                    if (selectedKey === item.key) {
+                        path.classList.add("active");
+                    } else {
+                        path.classList.add("dimmed");
+                    }
+                }
+
+                path.onclick = (e) => {
+                    e.stopPropagation();
+                    selectSlice(item);
+                };
+
+                group.appendChild(path);
+                startAngle = endAngle;
+            });
+        }
+
+        function selectSlice(item) {
+            if (selectedKey === item.key) {
+                resetSelection();
+                return;
+            }
+
+            selectedKey = item.key;
+            const slices = document.querySelectorAll(".slice");
+            slices.forEach(s => {
+                s.classList.remove("active");
+                if (s.id === "slice-" + item.key) {
+                    s.classList.add("active");
+                    s.classList.remove("dimmed");
+                } else {
+                    s.classList.add("dimmed");
+                }
+            });
+
+            updateCenterText(item);
+
+            if (window.AndroidBridge && window.AndroidBridge.onSliceSelected) {
+                window.AndroidBridge.onSliceSelected(item.key, item.label, item.sizeBytes || 0, item.count || 0);
+            }
+        }
+
+        function resetSelection() {
+            selectedKey = null;
+            const slices = document.querySelectorAll(".slice");
+            slices.forEach(s => {
+                s.classList.remove("active");
+                s.classList.remove("dimmed");
+            });
+
+            updateCenterText(null);
+
+            if (window.AndroidBridge && window.AndroidBridge.onSliceSelected) {
+                window.AndroidBridge.onSliceSelected("", "", 0, 0);
+            }
+        }
+
+        function updateCenterText(item) {
+            const titleEl = document.getElementById("center-title");
+            const subtitleEl = document.getElementById("center-subtitle");
+            const percentEl = document.getElementById("center-percent");
+
+            if (item) {
+                const val = currentMetric === "SIZE" ? formatBytes(item.sizeBytes) : formatCount(item.count);
+                const percent = (item.percentage * 100).toFixed(1) + "%";
+                titleEl.textContent = val;
+                subtitleEl.textContent = (item.label || item.key).toUpperCase();
+                percentEl.textContent = percent + " of total";
+                percentEl.setAttribute("fill", item.colorHex || "#00E5FF");
+            } else {
+                titleEl.textContent = formattedTotal;
+                subtitleEl.textContent = currentMetric === "SIZE" ? "TOTAL SPACE" : "TOTAL MEDIA";
+                percentEl.textContent = currentData.length + " Categories";
+                percentEl.setAttribute("fill", "#00E5FF");
+            }
+        }
+
+        // Window entry point called from Jetpack Compose AndroidView
+        window.loadStorageData = function(jsonDataString, mode, metric, initialSelectedKey) {
+            try {
+                const parsed = JSON.parse(jsonDataString);
+                currentMode = mode || "BY_FILE_TYPE";
+                currentMetric = metric || "SIZE";
+                selectedKey = initialSelectedKey || null;
+                renderDonutChart(parsed.items, parsed.formattedTotal);
+            } catch (e) {
+                console.error("Failed to parse storage json:", e);
+            }
+        };
+
+        // Notify Android container that Web page is ready
+        window.addEventListener("DOMContentLoaded", () => {
+            if (window.AndroidBridge && window.AndroidBridge.onChartReady) {
+                window.AndroidBridge.onChartReady();
+            }
+        });
+    </script>
+</body>
+</html>

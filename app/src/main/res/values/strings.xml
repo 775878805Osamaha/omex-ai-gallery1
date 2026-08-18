@@ -96,14 +96,25 @@
     <string name="cat_fish">سمك</string>
     <string name="cat_object">عنصر</string>
 
-    <!-- OCR Search Strings -->
-    <string name="search_title">البحث المحلي بالنصوص (OCR)</string>
-    <string name="search_placeholder_text_ocr">ابحث عن نصوص في الصور (مثل: فاتورة, invoice, 12345)...</string>
+    <!-- Intelligent Global Search Strings -->
+    <string name="search_title">البحث الذكي الشامل</string>
+    <string name="search_placeholder_text_ocr">ابحث باسم الملف، نصوص OCR، الكاميرا، أو الفئات...</string>
     <string name="recent_searches_header">عمليات البحث الأخيرة</string>
     <string name="clear_all">مسح الكل</string>
     <string name="search_results_count">نتائج البحث (%1$d)</string>
-    <string name="no_ocr_results_found">لم يتم العثور على صور تحتوي على النص "%1$s"</string>
+    <string name="no_ocr_results_found">لم يتم العثور على نتائج تطابق "%1$s"</string>
+    <string name="search_empty_hint">جرب البحث باسم الملف، النصوص داخل الصور، بيانات الكاميرا، أو الفئات الذكية مثل التداول والمنتجات.</string>
     <string name="ocr_text_extracted">النص المستخرج (OCR)</string>
+    <string name="search_filter_trading">تداول</string>
+    <string name="search_filter_products">منتجات</string>
+    <string name="search_filter_documents">مستندات</string>
+    <string name="search_filter_cars">سيارات</string>
+    <string name="search_filter_food">طعام</string>
+    <string name="search_filter_nature">طبيعة</string>
+    <string name="search_filter_travel">سفر</string>
+    <string name="search_filter_people">أشخاص</string>
+    <string name="search_filter_work">عمل</string>
+    <string name="search_filter_screenshots">لقطات شاشة</string>
 
     <!-- Local AI Chat Strings -->
     <string name="ai_chat_title">المحادثة الذكية المحلية (Local AI Chat)</string>
@@ -131,4 +142,163 @@
     <string name="suggestion_describe_image">صف هذه الصورة بدقة</string>
     <string name="suggestion_extract_text">استخرج النصوص الظاهرة في الصورة</string>
     <string name="suggestion_main_objects">ما هي العناصر الرئيسية في الصورة؟</string>
+
+    <!-- Selection Mode & Batch Delete -->
+    <string name="selection_mode_title">%1$d selected</string>
+    <string name="select_all">Select all</string>
+    <string name="deselect_all">Deselect all</string>
+    <string name="delete_selected">Delete selected</string>
+    <string name="favorite_selected">Favorite selected</string>
+    <string name="batch_delete_dialog_title">Delete %1$d items?</string>
+    <string name="batch_delete_dialog_msg">These items will be permanently deleted from the gallery and device storage. This action cannot be undone.</string>
+    <string name="delete_confirm">Delete</string>
+    <string name="cancel">Cancel</string>
+    <string name="items_deleted_success">Successfully deleted %1$d items</string>
+
+    <!-- Storage Analyzer Strings -->
+    <string name="storage_analyzer_title">Storage Analyzer</string>
+    <string name="storage_analyzer_subtitle">Media distribution &amp; space consumption insights</string>
+    <string name="storage_total_used">Total Storage Used</string>
+    <string name="storage_total_items">Total Items</string>
+    <string name="storage_photos_size">Photos</string>
+    <string name="storage_videos_size">Videos</string>
+    <string name="storage_duplicates_size">Duplicate Savings</string>
+    <string name="storage_group_format">By File Format</string>
+    <string name="storage_group_category">By AI Category</string>
+    <string name="storage_group_media_type">By Media Type</string>
+    <string name="storage_metric_size">By Size</string>
+    <string name="storage_metric_count">By Count</string>
+    <string name="storage_chart_title">D3 Interactive Distribution Chart</string>
+    <string name="storage_chart_interactive_hint">Tap any slice to filter matching space-consuming files</string>
+    <string name="storage_distribution_breakdown">Storage Breakdown</string>
+    <string name="storage_largest_files">Space-Consuming Media</string>
+    <string name="storage_quick_clean">Space Cleanup Suggestions</string>
+    <string name="storage_filter_all">All</string>
+    <string name="storage_filter_large_videos">Large Videos (&gt;50MB)</string>
+    <string name="storage_filter_duplicates">Duplicates</string>
+    <string name="storage_filter_screenshots">Screenshots</string>
+    <string name="storage_filter_large_photos">Large Photos (&gt;5MB)</string>
+    <string name="storage_clean_duplicates_btn">Clean Duplicate Media</string>
+    <string name="storage_no_items_filter">No media files found matching the selected filter</string>
+    <string name="storage_reclaim_space">Reclaim Space</string>
+    <string name="storage_delete_single_confirm">Delete this file permanently to free %1$s?</string>
+    <string name="storage_batch_delete_confirm">Delete %1$d files to free %2$s?</string>
+
+    <!-- Privacy Report & Offline AI Transparency Strings -->
+    <string name="privacy_report_title">Privacy &amp; Media Access Report</string>
+    <string name="privacy_report_subtitle">100% Offline On-Device AI Audit &amp; Process Transparency</string>
+    <string name="privacy_report_button">Privacy Report</string>
+    <string name="privacy_100_local_title">100% Local On-Device AI Architecture</string>
+    <string name="privacy_100_local_subtitle">All classifications, visual embeddings &amp; hashes stay on your phone</string>
+    <string name="privacy_on_device_ai_analyzed">Local Media Scanned</string>
+    <string name="privacy_cloud_upload_stat">Cloud Data Leaks</string>
+    <string name="privacy_sandbox_isolated">Sandboxed Security</string>
+    <string name="privacy_audit_filter_title">Filter Access Logs</string>
+    <string name="privacy_filter_all">All Access</string>
+    <string name="privacy_filter_offline_ai">Offline AI Engines</string>
+    <string name="privacy_filter_internal">Internal Pipelines</string>
+    <string name="privacy_filter_external">System &amp; Apps</string>
+    <string name="privacy_recent_access_logs">Recent Local Media Access History</string>
+    <string name="privacy_access_entries">entries recorded</string>
+    <string name="privacy_offline_promise_title">Zero-Cloud Offline AI Privacy Guarantee</string>
+    <string name="privacy_offline_promise_desc">OMEX Gallery uses local TensorFlow Lite neural networks and DCT perceptual hashing compiled into on-device binaries. Your private photos, screenshots, and videos never leave your device\'s hardware memory boundary.</string>
+    <!-- Duplicate Media Detection & Hash Cleaner Strings -->
+    <string name="duplicate_finder_title">Duplicate Media Finder</string>
+    <string name="duplicate_finder_subtitle">SHA-256 Byte Checksum &amp; Perceptual Visual Hashes</string>
+    <string name="duplicate_none_found_title">No Duplicate Media Found</string>
+    <string name="duplicate_none_found_desc">All your photos and videos are unique. No redundant copies consuming extra storage space.</string>
+    <string name="duplicate_detected_groups">Identical Groups</string>
+    <string name="duplicate_selected_to_remove">selected for cleanup</string>
+    <string name="duplicate_hash_engine_title">Cryptographic &amp; Perceptual Hash Detection</string>
+    <string name="duplicate_hash_engine_subtitle">Identifies identical binary files (SHA-256) and visual replica photos (dHash/pHash)</string>
+    <string name="duplicate_groups_stat">Groups Found</string>
+    <string name="duplicate_redundant_files_stat">Redundant Copies</string>
+    <string name="duplicate_reclaimable_space_stat">Reclaimable Space</string>
+    <string name="duplicate_auto_clean_button">Clean All Redundant Copies (%1$s)</string>
+    <string name="duplicate_clean_group_title">Clean Group Duplicates</string>
+    <string name="duplicate_clean_group_confirm">Delete %1$d redundant duplicate copies and free %2$s of storage? (The original best-quality file will be preserved)</string>
+    <string name="duplicate_clean_all_title">Clean All Redundant Media</string>
+    <string name="duplicate_clean_all_confirm">Are you sure you want to delete %1$d redundant duplicate files and reclaim %2$s? (1 original file from each duplicate group will be safely kept)</string>
+    <!-- Zoom Gestures & Inspection Strings -->
+    <string name="zoom_level">Zoom %1$d%%</string>
+    <string name="zoom_reset">Reset Zoom (1x)</string>
+    <string name="double_tap_to_zoom">Double tap to zoom</string>
+    <string name="pinch_to_zoom">Pinch to zoom</string>
+    <!-- AI Suggestions Strings -->
+    <string name="ai_suggestions_title">AI Suggestions</string>
+    <string name="ai_suggestions_subtitle">Smart albums grouped by on-device ML tags</string>
+    <string name="ai_suggestions_count">%1$d Suggested Albums</string>
+    <string name="ai_suggestions_explore">Explore Album</string>
+    <string name="ai_suggestions_create_album">Save as Album</string>
+    <string name="ai_suggestions_create_all">Create All Suggested Albums</string>
+    <string name="ai_suggestions_dismiss">Dismiss</string>
+    <string name="ai_suggestions_photos_count">%1$d photos</string>
+    <string name="ai_suggestions_confidence">%1$d%% match</string>
+    <string name="ai_suggestions_active_banner">AI Album: %1$s • %2$d photos grouped by ML</string>
+    <string name="ai_suggestions_album_badge">AI THEMED</string>
+    <string name="ai_suggestions_hide">Hide Suggestions</string>
+    <string name="ai_suggestions_show">Show Suggestions</string>
+
+    <!-- Phase 2 Advanced Filters Strings -->
+    <string name="filters_title">الفلاتر المتقدمة</string>
+    <string name="filter_type_media">نوع الوسائط</string>
+    <string name="filter_status">الحالة</string>
+    <string name="filter_categories">التصنيفات الذكية</string>
+    <string name="filter_date">التاريخ</string>
+    <string name="filter_size">حجم الملف</string>
+    <string name="filter_extension">نوع الملف / الامتداد</string>
+    <string name="filter_dimension">أبعاد الصورة</string>
+    <string name="filter_status_favorite">المفضلة</string>
+    <string name="filter_status_non_favorite">غير المفضلة</string>
+    <string name="filter_date_today">اليوم</string>
+    <string name="filter_date_7days">آخر 7 أيام</string>
+    <string name="filter_date_30days">آخر 30 يومًا</string>
+    <string name="filter_date_this_year">هذا العام</string>
+    <string name="filter_date_custom">نطاق مخصص</string>
+    <string name="filter_size_lt_1mb">أقل من 1 MB</string>
+    <string name="filter_size_1_5mb">1–5 MB</string>
+    <string name="filter_size_5_50mb">5–50 MB</string>
+    <string name="filter_size_gt_50mb">أكبر من 50 MB</string>
+    <string name="filter_dim_small">صور صغيرة (&lt; 1 MP)</string>
+    <string name="filter_dim_medium">صور متوسطة (1–4 MP)</string>
+    <string name="filter_dim_high_res">دقة عالية (&gt; 4 MP)</string>
+    <string name="apply_filters">تطبيق الفلاتر</string>
+    <string name="apply_filters_with_count">تطبيق الفلاتر (%1$d نتائج)</string>
+    <string name="reset_filters">إعادة ضبط</string>
+    <string name="active_filters_count">الفلاتر النشطة (%1$d)</string>
+    <string name="custom_date_from">من: %1$s</string>
+    <string name="custom_date_to">إلى: %1$s</string>
+
+    <!-- Phase 4 Customer Share & WhatsApp Strings -->
+    <string name="customer_share_title">مشاركة للعميل</string>
+    <string name="customer_share_subtitle">توليد وصف ذكي وإرسال الصورة والنص معًا</string>
+    <string name="customer_share_preview_title">معاينة مشاركة المنتج</string>
+    <string name="customer_share_send_whatsapp">مشاركة عبر واتساب</string>
+    <string name="customer_share_send_other">مشاركة عبر تطبيقات أخرى</string>
+    <string name="customer_share_edit_text">تعديل وصف المنتج</string>
+    <string name="customer_share_cancel">إلغاء</string>
+    <string name="customer_share_default_suffix">للطلب والاستفسار التواصل معنا.</string>
+
+    <!-- Phase 5 Storage Analyzer Extended Strings -->
+    <string name="storage_group_size">حسب الحجم</string>
+    <string name="storage_filter_large_videos_100mb">فيديوهات &gt; 100 MB</string>
+    <string name="storage_filter_large_files_5mb">ملفات &gt; 5 MB</string>
+    <string name="storage_filter_large_files_50mb">ملفات &gt; 50 MB</string>
+    <string name="storage_filter_large_files_100mb">ملفات &gt; 100 MB</string>
+    <string name="storage_filter_largest_all">أكبر الملفات</string>
+    <string name="storage_sort_title">الترتيب:</string>
+    <string name="storage_sort_largest">الأكبر حجمًا</string>
+    <string name="storage_sort_smallest">الأصغر حجمًا</string>
+    <string name="storage_sort_newest">الأحدث</string>
+    <string name="storage_sort_oldest">الأقدم</string>
+    <string name="storage_sort_type">حسب النوع</string>
+    <string name="storage_other_files_size">أخرى</string>
+    <string name="storage_reclaimable_label">مساحة قابلة للاسترداد</string>
+    <string name="storage_screenshots_section">لقطات الشاشة</string>
+    <string name="storage_quick_cleanup_title">التنظيف السريع الذكي</string>
+    <string name="storage_quick_clean_reason_video50">فيديوهات عالية الاستهلاك للمساحة (&gt; 50 MB)</string>
+    <string name="storage_quick_clean_reason_video100">فيديوهات ضخمة جدًا (&gt; 100 MB)</string>
+    <string name="storage_quick_clean_reason_photo5">صور بدقة عالية وحجم كبير (&gt; 5 MB)</string>
+    <string name="storage_quick_clean_reason_dup">نسخ متطابقة أو شبه متطابقة يمكن استرداد مساحتها بأمان</string>
+    <string name="storage_quick_clean_reason_screens">لقطات شاشة مؤقتة قد لا تحتاجها</string>
 </resources>
