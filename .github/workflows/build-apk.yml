@@ -13,11 +13,11 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up JDK 17
+      - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
-          java-version: '17'
+          java-version: '21'
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
@@ -27,7 +27,7 @@ jobs:
           if [ -n "$KEYSTORE_PATH" ] && [ -f "$KEYSTORE_PATH" ]; then
             echo "Using provided release keystore at $KEYSTORE_PATH"
           elif [ ! -f debug.keystore ]; then
-            echo "Release keystore secrets not provided. Generating temporary debug keystore..."
+            echo "Release keystore secrets not provided. Generating debug keystore..."
             keytool -genkeypair -v \
               -keystore debug.keystore \
               -alias androiddebugkey \
@@ -54,7 +54,7 @@ jobs:
       - name: Verify APK Output
         run: |
           if [ ! -f app/build/outputs/apk/release/app-release.apk ]; then
-            echo "::error::Build failed: app/build/outputs/apk/release/app-release.apk was not generated."
+            echo "::error::Build failed: app/build/outputs/apk/release/app-release.apk not found"
             exit 1
           fi
 
